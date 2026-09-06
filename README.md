@@ -1,129 +1,52 @@
-# AI Testing Agent
+# AI Testing Agent — v2.0.0
 
-A Java 21 testing agent that combines:
-- Plain-English test planning
-- Ollama/local LLM integration
-- API execution with RestAssured
-- UI execution with Playwright
-- Request chaining and variable extraction
-- Failure analysis
-- HTML, CSV and PDF reports
+## What changed from v1.0.0
 
-## Architecture
+Version 2 adds stronger execution controls while keeping the v1 safety model:
 
-Requirement -> LLM Planner -> Structured Test Plan -> Safe Tool Executor -> Results
-                                                    -> Failure Analyzer
-                                                    -> Reports
-
-The LLM never executes arbitrary Java code. It produces a constrained JSON plan,
-and the Java executor performs only supported actions.
-
-## Requirements
-
-- JDK 21+
-- Maven 3.9+
-- Ollama running locally for AI features
-- Playwright browsers for UI tests
-
-## Setup
-
-```bash
-mvn clean compile
-mvn exec:java
-```
-
-Install Playwright browsers:
-
-```bash
-mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
-```
-
-Install Ollama and a model, for example:
-
-```bash
-ollama pull llama3.2
-```
-
-The default Ollama endpoint is `http://localhost:11434`.
-
-## Configuration
-
-Environment variables:
-
-```text
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
-BASE_URL=https://example.com
-```
-
-## Example request
-
-Run the application and enter:
-
-```text
-Create a GET API test for /users. Verify status 200 and verify that the response
-contains a field named id.
-```
-
-The planner generates a safe JSON plan. The executor runs only known actions.
+- API headers and query parameters
+- runtime variable initialization and `${variable}` substitution
+- response-time assertions
+- response-body capture in execution details
+- fail-fast step execution
+- UI `assertValue` and `waitFor`
+- configurable per-step timeout
+- automatic failure screenshots for UI tests
+- explicit validation for missing API/UI base URLs
+- richer example plan
 
 ## Supported API actions
-
 GET, POST, PUT, PATCH, DELETE
 
-Assertions:
-- HTTP status
-- response body contains text
-- JSON path equals value
-- JSON path exists
-- response time
+API step fields include `path`, `headers`, `query`, `body`, `assertSpec`, `save`, and `timeoutMs`.
 
-Variable extraction:
-- JSONPath -> runtime variable
+Assertions include HTTP status, body contains, JSONPath existence/equality, and maximum response time.
 
-Example:
+## Supported UI actions
+navigate, click, fill, press, selectOption, assertVisible, assertText, assertValue, waitFor, screenshot.
+
+## Variable flow
+
+A plan can define initial variables:
 
 ```json
-{
-  "name": "Create user",
-  "type": "API",
-  "steps": [
-    {
-      "action": "POST",
-      "path": "/users",
-      "body": "{\"name\":\"agent-user\"}",
-      "save": {
-        "userId": "$.id"
-      }
-    },
-    {
-      "action": "GET",
-      "path": "/users/${userId}",
-      "assert": {
-        "status": 200
-      }
-    }
-  ]
-}
+"variables": {"environment": "test"}
 ```
 
-## UI actions
+Use them anywhere as `${environment}`. API `save` entries extract JSONPath values from a response for later steps.
 
-navigate, click, fill, press, selectOption, assertVisible, assertText, screenshot.
+## Failure handling
 
-## Reports
+Execution stops after the first failed step. UI failures attempt to capture a screenshot under `reports/screenshots/`.
 
-Generated under:
+## Safety
 
-```text
-reports/
-  report.html
-  report.csv
-  report.pdf
-```
+The LLM is still restricted to a fixed JSON test-plan schema. No arbitrary shell, Java, JavaScript, or SQL execution is introduced.
 
-## Safety model
+## Example
 
-Never allow the LLM to return shell commands or arbitrary Java. Validate its JSON
-against the application's supported actions before execution. Keep secrets in
-environment variables and never send credentials to the model.
+See `examples/v2-execution.json` for API query/header usage and the enhanced UI flow.
+
+## Versioning
+
+This commit represents milestone `v2.0.0`.

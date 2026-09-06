@@ -9,6 +9,9 @@ public class TestStep {
     public String locator = "";
     public String value = "";
     public String body = "";
+    public int timeoutMs = 30000;
+    public Map<String, String> headers = new LinkedHashMap<>();
+    public Map<String, String> query = new LinkedHashMap<>();
     public AssertionSpec assertSpec = new AssertionSpec();
     public Map<String, String> save = new LinkedHashMap<>();
 
@@ -17,5 +20,6 @@ public class TestStep {
         public String contains;
         public String jsonPath;
         public String equals;
+        public Long responseTimeMs;
     }
 }

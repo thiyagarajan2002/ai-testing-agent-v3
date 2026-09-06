@@ -1,0 +1,32 @@
+{
+  "name": "API + UI execution v2 examples",
+  "api": {
+    "name": "HTTPBin headers and query",
+    "type": "API",
+    "baseUrl": "https://httpbin.org",
+    "variables": {"requestId": "v2-demo"},
+    "steps": [
+      {
+        "action": "GET",
+        "path": "/anything",
+        "headers": {"X-Test-Version": "${requestId}"},
+        "query": {"source": "ai-testing-agent", "version": "2.0.0"},
+        "assertSpec": {"status": 200, "contains": "ai-testing-agent"}
+      }
+    ]
+  },
+  "ui": {
+    "name": "UI action improvements",
+    "type": "UI",
+    "baseUrl": "https://www.saucedemo.com",
+    "steps": [
+      {"action": "navigate", "value": "/"},
+      {"action": "fill", "locator": "#user-name", "value": "standard_user"},
+      {"action": "fill", "locator": "#password", "value": "secret_sauce"},
+      {"action": "click", "locator": "#login-button"},
+      {"action": "assertVisible", "locator": ".inventory_list"},
+      {"action": "assertText", "locator": ".title", "value": "Products"},
+      {"action": "screenshot", "value": "v2-products.png"}
+    ]
+  }
+}
