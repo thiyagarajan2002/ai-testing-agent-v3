@@ -1,21 +1,52 @@
-# AI Testing Agent — v3.0.0
+# AI Testing Agent — v3.1.0
 
 AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, and Playwright.
 
-## v3.0.0 — Runtime & deterministic execution
+## v3.1.0 — Test Suite execution
 
-Version 3 introduces centralized runtime configuration and deterministic execution of JSON test plans from files, while retaining the v2 safety model.
+Version 3.1 adds deterministic multi-plan suite execution while retaining direct plan execution and the v2 safety model.
 
 ### New capabilities
-- Centralized `Config` loaded from environment variables.
-- Configurable Ollama URL and model.
-- Configurable Playwright headless mode.
-- Configurable default timeout.
-- Configurable screenshot directory.
-- Direct JSON plan-file execution without requiring an LLM-generated plan.
-- Clear failure when a requested plan file does not exist.
-- API timeout uses the per-step timeout when supplied, otherwise the global default.
-- Existing variables, assertions, request chaining, fail-fast behavior, UI actions, screenshots, and AI failure analysis are retained.
+- `TestSuite` model containing a suite name and ordered plan-file list.
+- `suite <file>` command in the CLI.
+- Plans are resolved relative to the suite file directory.
+- Each plan is validated and executed through the same runtime used by direct plan execution.
+- AI failure analysis is attempted for failed plans without stopping the remaining suite plans.
+- Suite summary reports total, passed, and failed plans.
+- CLI returns exit code `1` when any suite plan fails, making suite execution CI-friendly.
+
+## Run a suite
+
+```bash
+mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=suite examples/v3-suite.json"
+```
+
+Example suite:
+
+```json
+{
+  "name": "Smoke Suite",
+  "plans": [
+    "../examples/v3-plan-file.json"
+  ]
+}
+```
+
+Plan paths are resolved relative to the suite file location.
+
+## Run a JSON plan directly
+
+```bash
+mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=plan examples/v3-plan-file.json"
+```
+
+A direct plan must match the `TestPlan` schema: `name`, `type`, `baseUrl`, optional `variables`, and `steps`.
+
+## Run AI interactive mode
+
+```bash
+mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=interactive"
+```
 
 ## Environment configuration
 
@@ -28,26 +59,8 @@ Version 3 introduces centralized runtime configuration and deterministic executi
 | `REPORTS_DIR` | `reports` | Report root directory |
 | `SCREENSHOTS_DIR` | `screenshots` | Screenshot subdirectory |
 
-## Run AI interactive mode
-
-```bash
-mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=interactive"
-```
-
-## Run a JSON plan directly
-
-```bash
-mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=plan examples/v2-execution.json"
-```
-
-A direct plan must match the `TestPlan` schema: `name`, `type`, `baseUrl`, optional `variables`, and `steps`.
-
 ## Supported API actions
 GET, POST, PUT, PATCH, DELETE
-
-API fields: `path`, `headers`, `query`, `body`, `assertSpec`, `save`, `timeoutMs`.
-
-Assertions: HTTP status, body contains, JSONPath existence/equality, and maximum response time.
 
 ## Supported UI actions
 navigate, click, fill, press, selectOption, assertVisible, assertText, assertValue, waitFor, screenshot.
@@ -65,4 +78,4 @@ mvn clean compile
 
 ## Versioning
 
-This commit represents milestone `v3.0.0`.
+This commit represents milestone `v3.1.0`.
