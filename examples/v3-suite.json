@@ -1,0 +1,6 @@
+{
+  "name": "Smoke Suite",
+  "plans": [
+    "../examples/v3-plan-file.json"
+  ]
+}
