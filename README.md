@@ -1,62 +1,68 @@
-# AI Testing Agent — v2.2.0
+# AI Testing Agent — v3.0.0
 
 AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, and Playwright.
 
-## v2.2.0 — Reporting Reliability
+## v3.0.0 — Runtime & deterministic execution
 
-- Failed executions are AI-analyzed before the report is written.
-- The final report can therefore contain the generated failure analysis.
-- If AI failure analysis itself fails, the original execution result is still reported.
-- Maven project version is `2.2.0`.
+Version 3 introduces centralized runtime configuration and deterministic execution of JSON test plans from files, while retaining the v2 safety model.
 
-## v2.1.0 reliability improvements
+### New capabilities
+- Centralized `Config` loaded from environment variables.
+- Configurable Ollama URL and model.
+- Configurable Playwright headless mode.
+- Configurable default timeout.
+- Configurable screenshot directory.
+- Direct JSON plan-file execution without requiring an LLM-generated plan.
+- Clear failure when a requested plan file does not exist.
+- API timeout uses the per-step timeout when supplied, otherwise the global default.
+- Existing variables, assertions, request chaining, fail-fast behavior, UI actions, screenshots, and AI failure analysis are retained.
 
-- API variables are reset and initialized from `plan.variables` for every execution.
-- API and UI execution validate required `baseUrl` and steps.
-- UI actions are case-insensitive.
-- AgentRunner validates plan type and supported actions before execution.
-- Blank requirements and empty LLM responses are rejected clearly.
-- Fail-fast execution and UI failure screenshots are retained.
+## Environment configuration
 
-## Supported API actions
+| Variable | Default | Purpose |
+|---|---|---|
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama server |
+| `OLLAMA_MODEL` | `llama3.2` | Ollama model |
+| `HEADLESS` | `true` | Playwright headless execution |
+| `DEFAULT_TIMEOUT_MS` | `30000` | Default API/UI timeout |
+| `REPORTS_DIR` | `reports` | Report root directory |
+| `SCREENSHOTS_DIR` | `screenshots` | Screenshot subdirectory |
 
-GET, POST, PUT, PATCH, DELETE
+## Run AI interactive mode
 
-API step fields include `path`, `headers`, `query`, `body`, `assertSpec`, `save`, and `timeoutMs`.
-
-Assertions include HTTP status, body contains, JSONPath existence/equality, and maximum response time.
-
-## Supported UI actions
-
-navigate, click, fill, press, selectOption, assertVisible, assertText, assertValue, waitFor, screenshot.
-
-## Variable flow
-
-Define initial variables in a plan:
-
-```json
-"variables": {"environment": "test"}
+```bash
+mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=interactive"
 ```
 
-Use them as `${environment}`. API `save` entries extract JSONPath values from a response for later steps. Variables are isolated per API execution.
+## Run a JSON plan directly
+
+```bash
+mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=plan examples/v2-execution.json"
+```
+
+A direct plan must match the `TestPlan` schema: `name`, `type`, `baseUrl`, optional `variables`, and `steps`.
+
+## Supported API actions
+GET, POST, PUT, PATCH, DELETE
+
+API fields: `path`, `headers`, `query`, `body`, `assertSpec`, `save`, `timeoutMs`.
+
+Assertions: HTTP status, body contains, JSONPath existence/equality, and maximum response time.
+
+## Supported UI actions
+navigate, click, fill, press, selectOption, assertVisible, assertText, assertValue, waitFor, screenshot.
 
 ## Safety
 
-The LLM is restricted to a fixed test-plan schema. The runtime executes only explicitly supported API and UI actions; arbitrary shell, Java, JavaScript, or SQL execution is not introduced.
+The LLM remains restricted to a fixed JSON test-plan schema. Runtime execution is limited to explicitly supported API and UI actions; arbitrary shell, Java, JavaScript, or SQL execution is not introduced.
 
-## Build
+## Build and test
 
 ```bash
 mvn clean test
 mvn clean compile
 ```
 
-## Run
-
-```bash
-mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=interactive"
-```
-
 ## Versioning
 
-This commit represents milestone `v2.2.0`.
+This commit represents milestone `v3.0.0`.
