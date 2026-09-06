@@ -6,6 +6,7 @@ import io.restassured.response.Response;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,10 +16,16 @@ public class ApiExecutor {
     private final Map<String, String> variables = new ConcurrentHashMap<>();
 
     public ExecutionResult execute(TestPlan plan) {
+        if (plan == null) throw new IllegalArgumentException("API plan cannot be null");
+        if (plan.steps == null || plan.steps.isEmpty()) throw new IllegalArgumentException("API plan contains no steps");
+        if (plan.baseUrl == null || plan.baseUrl.isBlank()) throw new IllegalArgumentException("API baseUrl is required");
+
+        variables.clear();
+        if (plan.variables != null) plan.variables.forEach((k, v) -> variables.put(k, String.valueOf(v)));
+
         ExecutionResult result = new ExecutionResult();
         result.testName = plan.name;
         result.passed = true;
-        if (plan.steps == null || plan.steps.isEmpty()) throw new IllegalArgumentException("API plan contains no steps");
 
         for (TestStep step : plan.steps) {
             long start = System.currentTimeMillis();
@@ -26,12 +33,7 @@ public class ApiExecutor {
                 String path = substitute(step.path);
                 String body = substitute(step.body);
                 String url = buildUrl(plan.baseUrl, path, step.query);
-
                 var request = given().headers(step.headers == null ? Map.of() : substituteMap(step.headers));
-                if (step.timeoutMs > 0) request = request.config(io.restassured.config.RestAssuredConfig.config().httpClient(
-                        io.restassured.config.HttpClientConfig.httpClientConfig().setParam("http.connection.timeout", step.timeoutMs)
-                                .setParam("http.socket.timeout", step.timeoutMs)));
-
                 Response response = switch (step.action.toUpperCase()) {
                     case "GET" -> request.when().get(url);
                     case "POST" -> request.contentType("application/json").body(body).when().post(url);
@@ -40,22 +42,16 @@ public class ApiExecutor {
                     case "DELETE" -> request.when().delete(url);
                     default -> throw new IllegalArgumentException("Unsupported API action: " + step.action);
                 };
-
                 long duration = System.currentTimeMillis() - start;
                 boolean ok = validate(response, step, duration);
-                StringBuilder details = new StringBuilder("HTTP ").append(response.statusCode())
-                        .append("; durationMs=").append(duration);
-
-                if (step.save != null) {
-                    for (var entry : step.save.entrySet()) {
-                        Object value = response.jsonPath().get(entry.getValue());
-                        if (value == null) throw new AssertionError("JSON extraction failed: " + entry.getValue());
-                        variables.put(entry.getKey(), String.valueOf(value));
-                        details.append("; saved=").append(entry.getKey());
-                    }
+                String details = "HTTP " + response.statusCode() + "; durationMs=" + duration + "; response=" + abbreviate(response.asString(), 1000);
+                if (step.save != null) for (var entry : step.save.entrySet()) {
+                    Object value = response.jsonPath().get(entry.getValue());
+                    if (value == null) throw new AssertionError("JSON extraction failed: " + entry.getValue());
+                    variables.put(entry.getKey(), String.valueOf(value));
+                    details += "; saved=" + entry.getKey();
                 }
-
-                result.steps.add(new ExecutionResult.StepResult(step.action, ok, details + "; response=" + abbreviate(response.asString(), 1000), duration));
+                result.steps.add(new ExecutionResult.StepResult(step.action, ok, details, duration));
                 if (!ok) { result.passed = false; break; }
             } catch (Exception e) {
                 result.passed = false;
@@ -82,24 +78,20 @@ public class ApiExecutor {
     }
 
     private Map<String, String> substituteMap(Map<String, String> source) {
-        Map<String, String> out = new java.util.LinkedHashMap<>();
-        for (var e : source.entrySet()) out.put(substitute(e.getKey()), substitute(e.getValue()));
+        Map<String, String> out = new LinkedHashMap<>();
+        source.forEach((k, v) -> out.put(substitute(k), substitute(v)));
         return out;
     }
 
     private String buildUrl(String base, String path, Map<String, String> query) {
         String target = path == null ? "" : path;
-        String url = target.startsWith("http://") || target.startsWith("https://") ? target
-                : base.replaceAll("/$", "") + "/" + target.replaceFirst("^/", "");
+        String url = target.startsWith("http://") || target.startsWith("https://") ? target : base.replaceAll("/$", "") + "/" + target.replaceFirst("^/", "");
         if (query == null || query.isEmpty()) return substitute(url);
         StringBuilder q = new StringBuilder(url.contains("?") ? "&" : "?");
         boolean first = true;
         for (var e : query.entrySet()) {
-            if (!first) q.append('&');
-            first = false;
-            q.append(URLEncoder.encode(substitute(e.getKey()), StandardCharsets.UTF_8));
-            q.append('=');
-            q.append(URLEncoder.encode(substitute(e.getValue()), StandardCharsets.UTF_8));
+            if (!first) q.append('&'); first = false;
+            q.append(URLEncoder.encode(substitute(e.getKey()), StandardCharsets.UTF_8)).append('=').append(URLEncoder.encode(substitute(e.getValue()), StandardCharsets.UTF_8));
         }
         return substitute(url) + q;
     }
