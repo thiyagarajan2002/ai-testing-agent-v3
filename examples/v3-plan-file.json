@@ -1,0 +1,25 @@
+{
+  "name": "v3 Plan File Smoke Test",
+  "type": "API",
+  "baseUrl": "https://httpbin.org",
+  "variables": {
+    "version": "3.0.0"
+  },
+  "steps": [
+    {
+      "action": "GET",
+      "path": "/anything",
+      "headers": {
+        "X-Test-Version": "${version}"
+      },
+      "query": {
+        "source": "ai-testing-agent"
+      },
+      "assertSpec": {
+        "status": 200,
+        "contains": "ai-testing-agent"
+      },
+      "timeoutMs": 30000
+    }
+  ]
+}
