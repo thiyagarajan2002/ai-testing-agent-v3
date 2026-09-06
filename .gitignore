@@ -1,0 +1,5 @@
+target/
+reports/
+.idea/
+*.iml
+.env

@@ -1,0 +1,7 @@
+Create an API test.
+
+Base URL: https://example.com
+
+Call GET /users.
+Verify HTTP status 200.
+Verify the response contains "id".

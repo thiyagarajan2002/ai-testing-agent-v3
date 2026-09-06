@@ -1,0 +1,8 @@
+Create a UI test.
+
+Base URL: https://example.com
+Navigate to /login.
+Fill #username with testuser.
+Fill #password with testpassword.
+Click #login.
+Verify #dashboard is visible.
