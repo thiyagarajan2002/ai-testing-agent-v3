@@ -1,21 +1,20 @@
-# AI Testing Agent — v2.0.0
+# AI Testing Agent — v2.1.0
 
-## What changed from v1.0.0
+AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, and Playwright.
 
-Version 2 adds stronger execution controls while keeping the v1 safety model:
+## v2.1.0 reliability improvements
 
-- API headers and query parameters
-- runtime variable initialization and `${variable}` substitution
-- response-time assertions
-- response-body capture in execution details
-- fail-fast step execution
-- UI `assertValue` and `waitFor`
-- configurable per-step timeout
-- automatic failure screenshots for UI tests
-- explicit validation for missing API/UI base URLs
-- richer example plan
+- API variables are reset and initialized from `plan.variables` for every execution.
+- API execution validates the plan and required `baseUrl` before making requests.
+- UI execution validates the plan and required `baseUrl` before opening the browser.
+- UI actions are case-insensitive, so `GET`-style casing differences do not break supported action matching.
+- AgentRunner validates plan type, base URL, steps, and supported actions before execution.
+- Blank LLM requirements and empty LLM responses are rejected clearly.
+- Existing fail-fast behavior is retained.
+- Existing UI failure screenshots are retained.
 
 ## Supported API actions
+
 GET, POST, PUT, PATCH, DELETE
 
 API step fields include `path`, `headers`, `query`, `body`, `assertSpec`, `save`, and `timeoutMs`.
@@ -23,30 +22,36 @@ API step fields include `path`, `headers`, `query`, `body`, `assertSpec`, `save`
 Assertions include HTTP status, body contains, JSONPath existence/equality, and maximum response time.
 
 ## Supported UI actions
+
 navigate, click, fill, press, selectOption, assertVisible, assertText, assertValue, waitFor, screenshot.
 
 ## Variable flow
 
-A plan can define initial variables:
+Define initial variables in a plan:
 
 ```json
 "variables": {"environment": "test"}
 ```
 
-Use them anywhere as `${environment}`. API `save` entries extract JSONPath values from a response for later steps.
-
-## Failure handling
-
-Execution stops after the first failed step. UI failures attempt to capture a screenshot under `reports/screenshots/`.
+Use them as `${environment}`. API `save` entries extract JSONPath values from a response for later steps. Variables are isolated per API execution.
 
 ## Safety
 
-The LLM is still restricted to a fixed JSON test-plan schema. No arbitrary shell, Java, JavaScript, or SQL execution is introduced.
+The LLM is restricted to a fixed test-plan schema. The Java runtime executes only explicitly supported API and UI actions; arbitrary shell, Java, JavaScript, or SQL execution is not introduced.
 
-## Example
+## Build
 
-See `examples/v2-execution.json` for API query/header usage and the enhanced UI flow.
+```bash
+mvn clean test
+mvn clean compile
+```
+
+## Run
+
+```bash
+mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=interactive"
+```
 
 ## Versioning
 
-This commit represents milestone `v2.0.0`.
+This commit represents milestone `v2.1.0`.
