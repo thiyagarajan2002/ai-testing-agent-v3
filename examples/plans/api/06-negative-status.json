@@ -1,0 +1,13 @@
+{
+  "name": "API Negative Status Validation",
+  "type": "API",
+  "baseUrl": "https://httpbin.org",
+  "steps": [
+    {
+      "action": "GET",
+      "path": "/status/404",
+      "assertSpec": {"status": 404},
+      "timeoutMs": 30000
+    }
+  ]
+}
