@@ -1,45 +1,69 @@
-# AI Testing Agent — v3.11.0
+# AI Testing Agent — v3.12.0
 
 AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, and Playwright.
 
-## v3.11.0 — Test Execution History & Run Comparison
+## v3.12.0 — Historical Analytics & Flaky-Test Detection
 
-Version 3.11 adds persistent suite execution history and automatic previous-vs-current comparison.
+Version 3.12 extends v3.11 execution history with historical analytics, flaky-test detection, and a dedicated analytics dashboard.
 
 ### New capabilities
-- Every suite execution is snapshotted under `reports/history/<run-id>/`.
-- Stable comparison identity uses `planFile + testName`.
-- Categories: `REGRESSION`, `FIXED`, `PASSED_UNCHANGED`, `FAILED_UNCHANGED`, `NEW_TEST`, `REMOVED_TEST`.
-- Tracks pass-rate delta and total-duration delta.
-- Writes `comparison.json`, `comparison.csv`, and `comparison.html` for each run.
-- Maintains `reports/history/index.json` and a browsable `reports/history/index.html` dashboard.
-- Duplicate stable test identities are rejected so comparisons cannot silently overwrite results.
-- History recording is isolated from the main test result; a history/reporting problem does not change a suite pass/fail result.
+- Analyzes the most recent 20 recorded suite runs by default.
+- Tracks each stable test by `planFile + testName`.
+- Calculates executions, passes, failures, status changes, and average duration.
+- Detects flaky tests when a test has both PASS and FAIL observations and its status-change rate meets the configured threshold.
+- Default flaky threshold is `0.50` (50% status changes between consecutive observations).
+- Lists the top 10 slowest tests by average execution duration.
+- Writes `reports/history/analytics.json`, `analytics.csv`, and `analytics.html`.
+- Keeps the existing `index.html` history dashboard and per-run comparison pages.
+- Analytics/reporting failures remain isolated from the actual suite pass/fail result.
 
-History layout:
+Analytics layout:
 
 ```text
 reports/history/
 ├── index.json
 ├── index.html
-└── 20260907-123456-789/
+├── analytics.json
+├── analytics.csv
+├── analytics.html
+└── <run-id>/
     ├── suite-execution.json
     ├── comparison.json
     ├── comparison.csv
     └── comparison.html
 ```
 
-### Bugs fixed in v3.11
-- Fixed stale CLI banner that still displayed `v3.8.0`.
-- Fixed API retry fallback: when a step omits `retryCount`, the executor now uses global `RETRIES` configuration.
-- Fixed interactive EOF handling so redirected/non-interactive input does not throw on `Scanner.nextLine()`.
-- Fixed GitHub Actions failure caused by Playwright browser installation running before the Java build. CI now runs the deterministic Maven unit/build verification first.
+### Flaky detection formula
+
+For a test observed in `N` runs:
+
+`flakinessRate = statusChanges / (N - 1)`
+
+A test is reported as flaky when:
+1. It has at least two observations.
+2. It has at least one PASS and one FAIL.
+3. Its flakiness rate is at least the configured threshold.
+
+Example: `PASS → FAIL → PASS → FAIL` produces 3 status changes across 3 transitions, so the flakiness rate is 100%.
+
+### Analytics output
+
+`analytics.html` contains:
+- Runs analyzed
+- Number of unique tests observed
+- Flaky test table
+- Slowest test table
+- Links to JSON/CSV/history dashboards
+
+`analytics.json` is intended for automation and future dashboard integrations. `analytics.csv` is suitable for spreadsheet/BI analysis.
+
+## v3.11.0 — Test Execution History & Run Comparison
+
+Every suite execution is snapshotted under `reports/history/<run-id>/`. Stable comparison identity uses `planFile + testName`. Categories are `REGRESSION`, `FIXED`, `PASSED_UNCHANGED`, `FAILED_UNCHANGED`, `NEW_TEST`, and `REMOVED_TEST`. Pass-rate and duration deltas are tracked and written to JSON/CSV/HTML comparison reports.
 
 ## v3.10.0 — Secure Secrets & Sensitive Data Redaction
 
 Centralized `SecurityRedactor` protection masks passwords, secrets, tokens, API keys, client secrets, authorization values, cookies, common auth headers, and sensitive environment-variable values before logs, reports, failure artifacts, or AI failure-analysis prompts are persisted/transmitted.
-
-Redaction protects evidence/output while live requests still receive real runtime values. Keep credentials in CI secrets or operating-system environment variables and use `${env.NAME}` placeholders instead of committing secrets.
 
 ## v3.9.0 — Advanced Assertions & Validation Diagnostics
 
@@ -71,11 +95,9 @@ mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=plan e
 mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=suite examples/v3-suite.json --env qa"
 ```
 
-Unresolved placeholders fail fast.
-
 ## v3.7.0 — CI/CD & GitHub Actions
 
-`.github/workflows/ci.yml` runs for pushes/pull requests to `main` and manual dispatch. It uses Java 21 Temurin, Maven caching, executes `mvn -B --no-transfer-progress clean verify`, and uploads `reports/` when present.
+`.github/workflows/ci.yml` runs for pushes/pull requests to `main` and manual dispatch. It uses Java 21 Temurin and executes `mvn -B --no-transfer-progress clean verify`, uploading `reports/` when present.
 
 Playwright browser installation is intentionally not part of the unit-build gate because the current CI tests do not require a browser. Install Chromium before executing UI plans:
 
@@ -124,7 +146,9 @@ SecurityRedactor
     ↓
 ReportManager / SuiteReportManager
     ↓
-RunHistoryManager → history + comparison dashboard
+RunHistoryManager → comparison/history
+    ↓
+HistoryAnalyticsManager → analytics/flaky/slow tests
 ```
 
 ## Project structure
@@ -140,6 +164,7 @@ src/main/java/com/thiyagarajan/agent/
     ├── ApiExecutor.java
     ├── ExecutionResult.java
     ├── FailureArtifactManager.java
+    ├── HistoryAnalyticsManager.java
     ├── RunComparisonResult.java
     ├── RunHistoryManager.java
     ├── SecurityRedactor.java
@@ -181,6 +206,16 @@ mvn -B clean verify
 5. Review custom assertion/test-data values before sharing reports.
 6. The LLM remains restricted to the fixed test-plan schema; arbitrary shell, JavaScript, SQL, or Java execution is not introduced.
 
+## v3.11 PDF compilation fix
+
+The CI compiler error caused by calling `Paragraph.setBold()` was fixed. In the iText version used by this project, bold styling is applied to the contained `Text` element instead:
+
+```java
+new Paragraph(new Text("Heading").setBold()).setFontSize(18)
+```
+
+The same correction is applied to both `PdfReportWriter` and `SuiteReportManager`.
+
 ## Version history
 
 - v3.2.0 — Retry & resilience engine
@@ -193,3 +228,4 @@ mvn -B clean verify
 - v3.9.0 — Advanced assertions & validation diagnostics
 - v3.10.0 — Secure secrets & sensitive-data redaction
 - v3.11.0 — Execution history, run comparison, regression detection, CI/bug fixes
+- v3.12.0 — Historical analytics, flaky-test detection, slow-test analysis, PDF compilation fix
