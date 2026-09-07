@@ -1,24 +1,92 @@
-# AI Testing Agent — v3.8.0
+# AI Testing Agent — v3.9.0
 
 AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, and Playwright.
 
-## v3.8.0 — Test Data Management & Environment Profiles
+## v3.9.0 — Advanced Assertions & Validation Diagnostics
 
-Version 3.8 adds environment-aware execution without changing the base test-plan files. Profiles provide environment-specific base URLs, headers, variables, timeouts, and optional JSON test data.
+Version 3.9 extends API validation from a small fixed set of checks to a typed assertion engine. Existing `assertSpec` plans remain compatible, while the new `assertions` array supports multiple checks on the same response and reports exactly which validations failed.
 
 ### New capabilities
-- JSON environment profiles under `config/environments/`.
-- Optional JSON test data files referenced by a profile.
-- CLI environment selection with `--env <name>`.
-- `${profile.X}` placeholders for profile variables.
-- `${data.X}` placeholders for values from the profile's test-data file.
-- `${env.X}` placeholders for operating-system environment variables.
-- Profile headers are merged with test-step headers; step headers take precedence.
-- Profile timeout applies to steps that still use the default 30000 ms timeout.
-- Suite execution applies the same profile independently to every test.
-- No new YAML dependency is required; JSON keeps configuration consistent with test plans.
+- Multiple typed API assertions per step.
+- HTTP status validation.
+- Response-body contains / not-contains validation.
+- Regular-expression validation against the full response body.
+- Case-sensitive response-header equality validation.
+- JSONPath existence validation.
+- JSONPath exact-value validation.
+- JSONPath contains validation.
+- JSONPath regular-expression validation.
+- Response-time limit validation.
+- Placeholder substitution inside assertion expected values.
+- Detailed assertion failure diagnostics in execution results and failure artifacts.
+- Backward compatibility with the existing `assertSpec` object.
 
-### Directory structure
+### Advanced assertion schema
+
+A step can contain multiple assertions:
+
+```json
+{
+  "action": "GET",
+  "path": "/users/1",
+  "assertions": [
+    {"type": "status", "expected": "200"},
+    {"type": "headerEquals", "path": "Content-Type", "expected": "application/json"},
+    {"type": "jsonPathExists", "path": "$.id", "expected": "true"},
+    {"type": "jsonPathEquals", "path": "$.id", "expected": "1"},
+    {"type": "jsonPathRegex", "path": "$.name", "expected": ".+"},
+    {"type": "bodyNotContains", "expected": "error"},
+    {"type": "responseTimeMs", "expected": "1000"}
+  ]
+}
+```
+
+### Supported assertion types
+
+| Type | `path` | `expected` | Purpose |
+|---|---|---|---|
+| `status` | not used | HTTP status | Validates status code |
+| `bodyContains` | not used | text | Body must contain text |
+| `bodyNotContains` | not used | text | Body must not contain text |
+| `bodyRegex` | not used | regex | Body must match regex |
+| `headerEquals` | header name | value | Validates a response header |
+| `jsonPathExists` | JSONPath | `true` / `false` | Checks JSONPath presence |
+| `jsonPathEquals` | JSONPath | value | Exact JSONPath value |
+| `jsonPathContains` | JSONPath | text | JSONPath value contains text |
+| `jsonPathRegex` | JSONPath | regex | JSONPath value matches regex |
+| `responseTimeMs` | not used | milliseconds | Maximum allowed response time |
+
+### Legacy compatibility
+
+The existing format continues to work:
+
+```json
+{
+  "assertSpec": {
+    "status": 200,
+    "contains": "success",
+    "jsonPath": "$.id",
+    "equals": "1",
+    "responseTimeMs": 1000
+  }
+}
+```
+
+The runtime evaluates both `assertSpec` and the new `assertions` list when both are present.
+
+### Assertion diagnostics
+
+When validation fails, the step details include an `assertionFailures` field, for example:
+
+```text
+HTTP 200; attempt=1/1; durationMs=143; assertionFailures=status expected=201, actual=200 | jsonPath '$.id' expected='99', actual='1'
+```
+
+This makes reports and AI failure analysis more useful because the execution result identifies the failed condition rather than returning only `passed=false`.
+
+### Environment profiles
+
+v3.8 environment profiles remain available:
 
 ```text
 config/
@@ -28,87 +96,27 @@ config/
     └── qa.json
 ```
 
-### Example environment profile
-
-`config/environments/qa.json`:
-
-```json
-{
-  "name": "qa",
-  "baseUrl": "https://qa.example.com/api",
-  "timeoutMs": 15000,
-  "dataFile": "config/test-data/qa.json",
-  "variables": {
-    "tenant": "demo"
-  },
-  "headers": {
-    "Accept": "application/json",
-    "X-Tenant": "${profile.tenant}"
-  }
-}
-```
-
-### Example test data
-
-`config/test-data/qa.json`:
-
-```json
-{
-  "username": "demo-user",
-  "resourceId": "1",
-  "sampleText": "qa-test"
-}
-```
-
-Use values in a plan like:
-
-```json
-{
-  "path": "/users/${data.resourceId}",
-  "body": "{\"name\":\"${data.username}\"}"
-}
-```
-
-Environment variables can be used for secrets without storing them in Git:
-
-```text
-${env.API_TOKEN}
-```
-
-> Never commit real credentials, tokens, cookies, passwords, or production secrets to profile or data files.
-
-### Environment selection
-
-Single plan:
+Run a plan with an environment:
 
 ```bash
 mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=plan examples/v3-plan-file.json --env qa"
 ```
 
-Suite:
+Run a suite with an environment:
 
 ```bash
 mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=suite examples/v3-suite.json --env qa"
 ```
 
-PowerShell:
-
-```powershell
-mvn exec:java '-Dexec.mainClass=com.thiyagarajan.agent.Main' '-Dexec.args=plan examples/v3-plan-file.json --env qa'
-mvn exec:java '-Dexec.mainClass=com.thiyagarajan.agent.Main' '-Dexec.args=suite examples/v3-suite.json --env qa'
-```
-
-If `--env` is omitted, the existing default behavior is preserved and no profile is loaded.
-
-### Placeholder resolution
+Placeholders supported by environment profiles:
 
 | Placeholder | Source |
 |---|---|
-| `${profile.tenant}` | `variables` in the selected environment profile |
-| `${data.resourceId}` | JSON object in the profile's `dataFile` |
+| `${profile.tenant}` | Profile variables |
+| `${data.resourceId}` | Profile test-data JSON |
 | `${env.API_TOKEN}` | Operating-system environment variable |
 
-Unresolved placeholders fail fast instead of silently sending an incorrect request.
+Never commit credentials, tokens, cookies, passwords, or production secrets to profile/data files.
 
 ### Configuration
 
@@ -147,11 +155,28 @@ reports/suite/
         └── ...
 ```
 
+Failed API steps also create API evidence artifacts containing the request body, URL, response body, and assertion diagnostics. Review artifact handling before publishing reports.
+
 ### Supported actions
 
 API: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
 
 UI: `navigate`, `click`, `fill`, `press`, `selectOption`, `assertVisible`, `assertText`, `assertValue`, `waitFor`, `screenshot`.
+
+### Project structure
+
+```text
+src/main/java/com/thiyagarajan/agent/
+├── ai/
+├── config/
+├── model/
+├── report/
+└── runtime/
+    ├── ApiAssertionEngine.java
+    ├── ApiExecutor.java
+    ├── SuiteExecutionEngine.java
+    └── UiExecutor.java
+```
 
 ### Version history
 
@@ -162,6 +187,7 @@ UI: `navigate`, `click`, `fill`, `press`, `selectOption`, `assertVisible`, `asse
 - v3.6.0 — Test suite & parallel execution engine
 - v3.7.0 — CI/CD & GitHub Actions integration
 - v3.8.0 — Test data management & environment profiles
+- v3.9.0 — Advanced assertions & validation diagnostics
 
 ### Safety
 
