@@ -21,8 +21,7 @@ public final class PdfReportWriter {
         try (PdfWriter writer = new PdfWriter(file.toString());
              PdfDocument pdf = new PdfDocument(writer);
              Document document = new Document(pdf)) {
-            Paragraph heading = new Paragraph("AI Testing Agent Execution Report").setFontSize(18);
-            document.add(heading);
+            document.add(new Paragraph("AI Testing Agent Execution Report").setFontSize(18));
             document.add(new Paragraph("Test: " + text(result.testName)));
             document.add(new Paragraph("Status: " + (result.passed ? "PASS" : "FAIL")));
             document.add(new Paragraph("Steps: " + result.steps.size()));
