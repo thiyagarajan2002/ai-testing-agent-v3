@@ -1,0 +1,10 @@
+{
+  "name": "UI Homepage Smoke",
+  "type": "UI",
+  "baseUrl": "https://example.com",
+  "steps": [
+    {"action": "navigate", "value": "/"},
+    {"action": "assertvisible", "locator": "h1"},
+    {"action": "asserttext", "locator": "h1", "value": "Example Domain"}
+  ]
+}
