@@ -1,46 +1,54 @@
-# AI Testing Agent — v3.1.0
+# AI Testing Agent — v3.2.0
 
 AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, and Playwright.
 
-## v3.1.0 — Test Suite execution
+## v3.2.0 — Retry & resilience engine
 
-Version 3.1 adds deterministic multi-plan suite execution while retaining direct plan execution and the v2 safety model.
+Version 3.2 adds controlled API retry behavior while retaining the v3.1 suite execution and safety model.
 
 ### New capabilities
-- `TestSuite` model containing a suite name and ordered plan-file list.
-- `suite <file>` command in the CLI.
-- Plans are resolved relative to the suite file directory.
-- Each plan is validated and executed through the same runtime used by direct plan execution.
-- AI failure analysis is attempted for failed plans without stopping the remaining suite plans.
-- Suite summary reports total, passed, and failed plans.
-- CLI returns exit code `1` when any suite plan fails, making suite execution CI-friendly.
+- `retryCount` can be configured independently on each test step.
+- `retryCount` means the number of retries **after** the initial request.
+- A step with `retryCount: 2` can therefore execute up to 3 attempts.
+- API request exceptions and failed response assertions are retried until the attempt limit is reached.
+- Response-time assertions are evaluated against the duration of the current attempt, not previous attempts.
+- Attempt number, maximum attempts, and total step duration are included in execution details.
+- Response variables are saved only after a successful assertion, preventing failed attempts from corrupting extracted state.
+- Negative retry values are rejected during plan validation before execution.
+- Existing plans remain compatible: omitted `retryCount` means no retry (`0`).
+
+### Retry example
+
+```json
+{
+  "action": "GET",
+  "path": "/health",
+  "retryCount": 2,
+  "assertSpec": {
+    "status": 200
+  }
+}
+```
+
+With `retryCount: 2`, execution is:
+
+```text
+Attempt 1 -> failure -> retry
+Attempt 2 -> failure -> retry
+Attempt 3 -> success/final failure
+```
+
+## Run the retry example
+
+```bash
+mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=plan examples/v3-plan-file.json"
+```
 
 ## Run a suite
 
 ```bash
 mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=suite examples/v3-suite.json"
 ```
-
-Example suite:
-
-```json
-{
-  "name": "Smoke Suite",
-  "plans": [
-    "../examples/v3-plan-file.json"
-  ]
-}
-```
-
-Plan paths are resolved relative to the suite file location.
-
-## Run a JSON plan directly
-
-```bash
-mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=plan examples/v3-plan-file.json"
-```
-
-A direct plan must match the `TestPlan` schema: `name`, `type`, `baseUrl`, optional `variables`, and `steps`.
 
 ## Run AI interactive mode
 
@@ -78,4 +86,4 @@ mvn clean compile
 
 ## Versioning
 
-This commit represents milestone `v3.1.0`.
+This commit represents milestone `v3.2.0` — Retry & resilience engine.
