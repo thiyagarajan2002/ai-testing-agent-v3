@@ -54,7 +54,9 @@ public class AgentRunner {
 
     public ExecutionResult analyzeFailure(TestPlan plan, ExecutionResult result) throws Exception {
         if (result == null) throw new IllegalArgumentException("Execution result cannot be null");
-        result.failureAnalysis(llm.generate(PromptManager.failurePrompt(mapper.writeValueAsString(plan), mapper.writeValueAsString(result))));
+        String safePlan = SecurityRedactor.redactText(mapper.writeValueAsString(plan));
+        String safeResult = SecurityRedactor.redactText(mapper.writeValueAsString(result));
+        result.failureAnalysis(llm.generate(PromptManager.failurePrompt(safePlan, safeResult)));
         return result;
     }
 
