@@ -1,0 +1,8 @@
+{
+  "name": "UI Example Smoke Suite",
+  "plans": [
+    "../plans/ui/homepage-smoke.json",
+    "../plans/ui/login-flow.json",
+    "../plans/ui/search-flow.json"
+  ]
+}
