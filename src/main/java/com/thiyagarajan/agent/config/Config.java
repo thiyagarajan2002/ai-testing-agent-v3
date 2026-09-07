@@ -5,6 +5,7 @@ public record Config(
         String ollamaModel,
         boolean headless,
         int defaultTimeoutMs,
+        int parallelism,
         String reportsDir,
         String screenshotsDir) {
 
@@ -24,6 +25,7 @@ public record Config(
                 env("OLLAMA_MODEL", "llama3.2"),
                 Boolean.parseBoolean(env("HEADLESS", "true")),
                 Math.max(1, intEnv("DEFAULT_TIMEOUT_MS", 30000)),
+                Math.max(1, intEnv("PARALLELISM", 4)),
                 env("REPORTS_DIR", "reports"),
                 env("SCREENSHOTS_DIR", "screenshots")
         );
