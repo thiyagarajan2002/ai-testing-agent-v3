@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 public class ReportManager {
     private final Path dir;
     private final ExecutionLogWriter logWriter = new ExecutionLogWriter();
+    private final PdfReportWriter pdfWriter = new PdfReportWriter();
 
     public ReportManager() throws Exception { this(Path.of(Config.load().reportsDir())); }
     public ReportManager(Path directory) throws Exception {
@@ -20,10 +21,13 @@ public class ReportManager {
 
     public void writeAll(ExecutionResult result) throws Exception {
         if (result == null) throw new IllegalArgumentException("Execution result cannot be null");
-        writeHtml(result); writeCsv(result); writePdf(result); logWriter.write(result, dir);
+        writeHtml(result); writeCsv(result); pdfWriter.write(result, dir.resolve("report.pdf")); logWriter.write(result, dir);
     }
 
     private void writeHtml(ExecutionResult r) throws Exception {
+        long passed = r.steps.stream().filter(s -> s.passed).count();
+        long failed = r.steps.stream().filter(s -> !s.passed).count();
+        long duration = r.steps.stream().mapToLong(s -> s.durationMs).sum();
         String rows = r.steps.stream().map(s -> {
             String artifacts = s.artifacts == null || s.artifacts.isEmpty() ? "" : "<br><b>Artifacts:</b> " + s.artifacts.stream()
                     .map(a -> "<a href=\"" + esc(a) + "\">" + esc(a) + "</a>").collect(Collectors.joining(", "));
@@ -31,15 +35,16 @@ public class ReportManager {
                     + "</td><td>" + esc(s.details) + artifacts + "</td></tr>";
         }).collect(Collectors.joining());
         String html = """
-        <!doctype html><html><head><meta charset="UTF-8"><title>AI Testing Agent Report</title>
-        <style>body{font-family:Arial;margin:30px;background:#fafafa}table{border-collapse:collapse;width:100%%}th,td{border:1px solid #ccc;padding:8px;text-align:left;vertical-align:top}th{background:#eee}a{word-break:break-all}</style>
-        </head><body><h1>AI Testing Agent Report</h1>
+        <!doctype html><html><head><meta charset="UTF-8"><title>AI Testing Agent Dashboard</title>
+        <style>body{font-family:Arial;margin:30px;background:#f7f7f7;color:#222}.cards{display:flex;gap:12px;flex-wrap:wrap}.card{background:white;border:1px solid #ddd;border-radius:8px;padding:16px;min-width:140px}.value{font-size:24px;font-weight:bold}table{border-collapse:collapse;width:100%%;background:white}th,td{border:1px solid #ccc;padding:8px;text-align:left;vertical-align:top}th{background:#eee}a{word-break:break-all}pre{white-space:pre-wrap;background:white;padding:12px;border:1px solid #ddd}</style>
+        </head><body><h1>AI Testing Agent Execution Dashboard</h1>
         <p><b>Test:</b> %s</p><p><b>Status:</b> %s</p>
-        <p><b>Steps:</b> %d &nbsp; <b>Passed:</b> %d &nbsp; <b>Failed:</b> %d</p>
-        <table><tr><th>Action</th><th>Status</th><th>Duration(ms)</th><th>Details / Input &amp; Output / Artifacts</th></tr>%s</table>
-        <h2>Failure Analysis</h2><pre>%s</pre></body></html>
-        """.formatted(esc(r.testName), r.passed ? "PASS" : "FAIL", r.steps.size(), r.steps.stream().filter(s -> s.passed).count(),
-                r.steps.stream().filter(s -> !s.passed).count(), rows, esc(r.failureAnalysis));
+        <div class="cards"><div class="card">Steps<div class="value">%d</div></div><div class="card">Passed<div class="value">%d</div></div><div class="card">Failed<div class="value">%d</div></div><div class="card">Duration<div class="value">%d ms</div></div></div>
+        <h2>Step Results</h2><table><tr><th>Action</th><th>Status</th><th>Duration(ms)</th><th>Details / Input &amp; Output / Artifacts</th></tr>%s</table>
+        <h2>Failure Analysis</h2><pre>%s</pre>
+        <p><a href="execution.json">execution.json</a> | <a href="execution.log">execution.log</a> | <a href="report.csv">report.csv</a> | <a href="report.pdf">report.pdf</a></p>
+        </body></html>
+        """.formatted(esc(r.testName), r.passed ? "PASS" : "FAIL", r.steps.size(), passed, failed, duration, rows, esc(r.failureAnalysis));
         Files.writeString(dir.resolve("report.html"), html);
     }
 
@@ -49,12 +54,6 @@ public class ReportManager {
             for (var s : r.steps) w.write(csv(r.testName) + "," + csv(s.action) + "," + (s.passed ? "PASS" : "FAIL") + "," + s.durationMs
                     + "," + csv(s.details) + "," + csv(s.artifacts == null ? "" : String.join(" | ", s.artifacts)) + "\n");
         }
-    }
-
-    private void writePdf(ExecutionResult r) throws Exception {
-        Files.writeString(dir.resolve("report.pdf"), "AI Testing Agent Report\n\nTest: " + r.testName + "\nStatus: " + (r.passed ? "PASS" : "FAIL") + "\n\n"
-                + r.steps.stream().map(s -> s.action + " | " + (s.passed ? "PASS" : "FAIL") + " | " + s.durationMs + "ms | " + s.details
-                        + (s.artifacts == null || s.artifacts.isEmpty() ? "" : " | artifacts=" + String.join(";", s.artifacts))).collect(Collectors.joining("\n")));
     }
     private String csv(String s) { return s == null ? "" : "\"" + s.replace("\"", "\"\"").replace("\n", " ") + "\""; }
     private String esc(String s) { return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;"); }
