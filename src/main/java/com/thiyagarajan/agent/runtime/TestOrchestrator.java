@@ -7,6 +7,7 @@ import com.thiyagarajan.agent.config.EnvironmentManager;
 import com.thiyagarajan.agent.model.EnvironmentProfile;
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestSuite;
+import com.thiyagarajan.agent.report.DataDrivenReportManager;
 import com.thiyagarajan.agent.report.ReportManager;
 import com.thiyagarajan.agent.report.SuiteReportManager;
 
@@ -31,7 +32,7 @@ public final class TestOrchestrator implements AutoCloseable {
         this.environments = new EnvironmentManager(mapper);
         this.profile = environment == null || environment.isBlank() ? null : environments.load(environment, Path.of("."));
         this.runner = new AgentRunner(new OllamaClient(config.ollamaUrl(), config.ollamaModel()), mapper);
-        this.reports = new ReportManager();
+        try { this.reports = new ReportManager(); } catch (Exception e) { throw new AgentExecutionException(AgentExecutionException.Category.REPORTING, "Report manager initialization failed: " + e.getMessage(), e); }
     }
 
     public ExecutionResult executePlan(String file) throws Exception {
@@ -41,14 +42,40 @@ public final class TestOrchestrator implements AutoCloseable {
         ExecutionResult result = runner.execute(plan); analyzeIfFailed(plan, result); reports.writeAll(result); return result;
     }
 
-    /** Executes a plan once per JSON data row using ${data.key} placeholders. */
+    /** Executes a plan once per JSON data row and writes aggregate data-driven reports. */
     public DataDrivenExecutionResult executeDataDriven(String planFile, String dataFile) throws Exception {
         Path planPath = requireFile(planFile, AgentExecutionException.Category.PLAN_VALIDATION, "Plan");
         Path dataPath = requireFile(dataFile, AgentExecutionException.Category.PLAN_VALIDATION, "Data");
         TestPlan plan = readPlan(planPath);
         if (profile != null) environments.apply(plan, profile);
-        return new DataDrivenRunner(mapper, runner).execute(plan, dataPath);
+        DataDrivenExecutionResult result = new DataDrivenRunner(mapper, runner).execute(plan, dataPath);
+        for (DataDrivenExecutionResult.IterationResult iteration : result.iterations) {
+            if (iteration.execution != null && !iteration.execution.passed()) analyzeIfFailed(planForIteration(plan, iteration.data), iteration.execution);
+        }
+        Path reportDir = Path.of(config.reportsDir(), "data-driven", safeName(result.testName)).toAbsolutePath().normalize();
+        new DataDrivenReportManager(mapper, reportDir).writeAll(result);
+        return result;
     }
+
+    private TestPlan planForIteration(TestPlan template, java.util.Map<String, String> data) throws Exception {
+        TestPlan copy = mapper.readValue(mapper.writeValueAsString(template), TestPlan.class);
+        if (data == null) return copy;
+        copy.name = replace(copy.name, data);
+        copy.baseUrl = replace(copy.baseUrl, data);
+        if (copy.variables != null) copy.variables.replaceAll((k,v) -> replace(v, data));
+        if (copy.steps != null) for (var s : copy.steps) {
+            if (s == null) continue;
+            s.path=replace(s.path,data); s.locator=replace(s.locator,data); s.value=replace(s.value,data); s.body=replace(s.body,data);
+            if (s.headers != null) s.headers.replaceAll((k,v)->replace(v,data));
+            if (s.query != null) s.query.replaceAll((k,v)->replace(v,data));
+            if (s.save != null) s.save.replaceAll((k,v)->replace(v,data));
+            if (s.assertSpec != null) { s.assertSpec.contains=replace(s.assertSpec.contains,data); s.assertSpec.jsonPath=replace(s.assertSpec.jsonPath,data); s.assertSpec.equals=replace(s.assertSpec.equals,data); }
+            if (s.assertions != null) for (var a : s.assertions) if (a != null) { a.path=replace(a.path,data); a.expected=replace(a.expected,data); }
+        }
+        return copy;
+    }
+    private String replace(String value, java.util.Map<String,String> data) { if (value == null) return null; String out=value; for (var e:data.entrySet()) out=out.replace("${data."+e.getKey()+"}", e.getValue()==null?"":e.getValue()); return out; }
+    private String safeName(String value) { String s = value == null || value.isBlank() ? "data-driven-test" : value.replaceAll("[^a-zA-Z0-9._-]+", "_"); return s.length() > 80 ? s.substring(0,80) : s; }
 
     public TestPlanValidator.ValidationResult validatePlan(String file) throws Exception {
         Path path = requireFile(file, AgentExecutionException.Category.PLAN_VALIDATION, "Plan");
