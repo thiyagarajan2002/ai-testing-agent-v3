@@ -13,10 +13,12 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       HEADLESS: 'true'
       PARALLELISM: '4'
+      DEFAULT_TIMEOUT_MS: '30000'
+      RETRIES: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,14 +30,24 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Build and test
+      - name: Install Playwright Chromium
+        run: mvn -B --no-transfer-progress -DskipTests exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
+
+      - name: Build and unit test
         run: mvn -B --no-transfer-progress clean verify
 
-      - name: Upload test reports
+      - name: Run all repository examples
+        run: bash scripts/ci/run-examples.sh
+
+      - name: Upload test and example reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ai-testing-agent-reports
-          path: reports/
+          name: ai-testing-agent-ci-reports
+          path: |
+            reports/
+            screenshots/
+            target/surefire-reports/
+            target/ci-examples/
           if-no-files-found: ignore
           retention-days: 14
