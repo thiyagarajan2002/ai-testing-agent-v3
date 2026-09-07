@@ -1,0 +1,11 @@
+{
+  "name": "API Regression Examples",
+  "plans": [
+    "../plans/api/get-user.json",
+    "../plans/api/02-post.json",
+    "../plans/api/03-put.json",
+    "../plans/api/04-delete.json",
+    "../plans/api/05-query-headers.json",
+    "../plans/api/06-negative-status.json"
+  ]
+}
