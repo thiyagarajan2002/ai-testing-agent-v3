@@ -1,0 +1,12 @@
+{
+  "name": "UI Invalid Login",
+  "type": "UI",
+  "baseUrl": "https://www.saucedemo.com",
+  "steps": [
+    {"action":"navigate","value":"/"},
+    {"action":"fill","locator":"#user-name","value":"invalid_user"},
+    {"action":"fill","locator":"#password","value":"invalid_password"},
+    {"action":"click","locator":"#login-button"},
+    {"action":"assertvisible","locator":"[data-test=error]"}
+  ]
+}
