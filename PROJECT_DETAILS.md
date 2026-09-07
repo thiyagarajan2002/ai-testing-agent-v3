@@ -4,7 +4,7 @@
 
 AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama planning with REST Assured API execution, Playwright UI execution, JSON/CSV data-driven testing, environment profiles, assertions, retries, failure artifacts, HTML/JSON/CSV/PDF reporting, suite execution, history/analytics, security redaction, CI automation, and non-executing preflight validation.
 
-**Current version: 3.19.0**
+**Current version: 3.20.0**
 
 ## 2. Technology stack
 
@@ -24,11 +24,23 @@ AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI te
 
 ```text
 ai-testing-agent-v3/
-├── .github/workflows/ci.yml
-├── config/environments/
-├── config/test-data/
+├── .github/                     # CI/CD and repository automation
+├── config/
+│   ├── environments/            # Environment profiles
+│   └── test-data/                # Reusable test data
+├── docs/
+│   ├── architecture/             # Architecture and package boundaries
+│   ├── configuration/            # Configuration guidance
+│   ├── testing/                  # Testing standards
+│   └── releases/                 # Release documentation
 ├── examples/
-├── scripts/ci/
+│   ├── plans/api/                # API plans
+│   ├── plans/data-driven/        # Data-driven plans
+│   ├── suites/                   # Suite examples
+│   ├── data/json/                # JSON datasets
+│   ├── requirements/             # Natural-language requirements
+│   └── legacy/                   # Earlier-release compatibility examples
+├── scripts/ci/                   # CI helper scripts
 ├── src/main/java/com/thiyagarajan/agent/
 │   ├── Main.java
 │   ├── ai/
@@ -36,8 +48,18 @@ ai-testing-agent-v3/
 │   ├── model/
 │   ├── report/
 │   └── runtime/
-└── src/test/java/com/thiyagarajan/agent/
+├── src/main/resources/            # Runtime classpath resources
+├── src/test/java/com/thiyagarajan/agent/
+├── src/test/resources/            # Test-only fixtures
+├── reports/                       # Generated runtime output
+├── CONTRIBUTING.md
+├── SECURITY.md
+├── README.md
+├── PROJECT_DETAILS.md
+└── pom.xml
 ```
+
+Repository organization was standardized in v3.20.0 without changing runtime behavior. The target Java package architecture for a later controlled migration is documented in `docs/architecture/package-structure.md`.
 
 ## 4. Main commands
 
@@ -275,8 +297,48 @@ The first CI/test pass exposed two stale assumptions in the test suite:
 
 These are test-contract corrections; no production behavior was weakened to make the tests pass.
 
-## 21. Version history
+## 21. v3.20.0 — Repository organization & engineering standards
 
+This release reorganizes repository-level assets into clear ownership boundaries while preserving application behavior.
+
+### Standardized areas
+
+- Documentation is grouped into `architecture`, `configuration`, `testing` and `releases`.
+- Examples are grouped into API plans, data-driven plans, suites, datasets, requirements and legacy examples.
+- Runtime classpath resources now have a dedicated `src/main/resources/` home.
+- Test-only fixtures now have a dedicated `src/test/resources/` home.
+- `CONTRIBUTING.md` defines development and release workflow standards.
+- `SECURITY.md` defines safe handling of security reports and secrets.
+- `docs/releases/CHANGELOG.md` provides release-level change tracking.
+- The target Java package architecture is documented before undertaking an atomic package/import migration.
+
+### Target Java package architecture
+
+```text
+com.thiyagarajan.agent
+├── cli
+├── ai
+├── config
+├── model
+├── execution
+│   ├── api
+│   ├── ui
+│   ├── data
+│   └── suite
+├── validation
+├── reporting
+├── analytics
+├── security
+├── exception
+├── io
+└── util
+```
+
+The v3.20 release deliberately does not perform this Java package migration. Moving Java classes requires coordinated package declarations, imports, tests and CI changes and is therefore reserved for a dedicated controlled refactor. This avoids mixing structural repository changes with execution behavior changes.
+
+## 22. Version history
+
+- v3.20.0 — repository organization, documentation structure and engineering standards
 - v3.19.0 — bounded parallel data-driven execution, ordered results, performance metrics and CLI worker override; CI/test contract fixes
 - v3.18.0 — CSV datasets, dataset validation and exact row filtering
 - v3.17.0 — data-driven reporting and HTML dashboard
@@ -296,7 +358,7 @@ These are test-contract corrections; no production behavior was weakened to make
 - v3.3.0 — advanced reporting
 - v3.2.0 — retry support
 
-## 22. Development/release rule
+## 23. Development/release rule
 
 For every release:
 
@@ -304,7 +366,8 @@ For every release:
 2. Update `Main.java` CLI version.
 3. Update `README.md`.
 4. Update `PROJECT_DETAILS.md`.
-5. Add/update tests for new behavior.
-6. Verify Maven locally or verify the corresponding GitHub Actions run.
+5. Update `docs/releases/CHANGELOG.md`.
+6. Add/update tests for new behavior.
+7. Verify Maven locally or verify the corresponding GitHub Actions run.
 
 A release must not be described as build-verified unless Maven/CI actually completed successfully.
