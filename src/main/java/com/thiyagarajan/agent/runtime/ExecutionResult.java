@@ -11,7 +11,7 @@ public class ExecutionResult {
 
     public boolean passed() { return passed; }
     public String failureAnalysis() { return failureAnalysis; }
-    public void failureAnalysis(String value) { this.failureAnalysis = value; }
+    public void failureAnalysis(String value) { this.failureAnalysis = SecurityRedactor.redactText(value); }
 
     public static class StepResult {
         public String action;
@@ -23,7 +23,7 @@ public class ExecutionResult {
         public StepResult(String action, boolean passed, String details, long durationMs) {
             this.action = action;
             this.passed = passed;
-            this.details = details;
+            this.details = SecurityRedactor.redactText(details);
             this.durationMs = durationMs;
         }
 
