@@ -61,6 +61,7 @@ public class AgentRunner {
         if (plan.baseUrl == null || plan.baseUrl.isBlank()) throw new IllegalArgumentException("baseUrl is required");
         for (var step : plan.steps) {
             if (step == null || step.action == null || step.action.isBlank()) throw new IllegalArgumentException("Every step requires an action");
+            if (step.retryCount != null && step.retryCount < 0) throw new IllegalArgumentException("retryCount cannot be negative");
             String action = step.action.trim();
             if ("API".equalsIgnoreCase(plan.type) && !action.matches("(?i)GET|POST|PUT|PATCH|DELETE")) throw new IllegalArgumentException("Invalid API action: " + action);
             if ("UI".equalsIgnoreCase(plan.type) && !action.matches("(?i)navigate|click|fill|press|selectOption|assertVisible|assertText|assertValue|waitFor|screenshot")) throw new IllegalArgumentException("Invalid UI action: " + action);
