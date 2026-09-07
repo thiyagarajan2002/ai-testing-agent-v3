@@ -1,0 +1,14 @@
+{
+  "name": "API GET Anything",
+  "type": "API",
+  "baseUrl": "https://httpbin.org",
+  "steps": [
+    {
+      "action": "GET",
+      "path": "/anything",
+      "query": {"example": "get-user"},
+      "assertSpec": {"status": 200, "contains": "get-user"},
+      "timeoutMs": 30000
+    }
+  ]
+}
