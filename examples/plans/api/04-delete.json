@@ -1,0 +1,13 @@
+{
+  "name": "API DELETE Resource",
+  "type": "API",
+  "baseUrl": "https://httpbin.org",
+  "steps": [
+    {
+      "action": "DELETE",
+      "path": "/anything/resources/1",
+      "assertSpec": {"status": 200},
+      "timeoutMs": 30000
+    }
+  ]
+}
