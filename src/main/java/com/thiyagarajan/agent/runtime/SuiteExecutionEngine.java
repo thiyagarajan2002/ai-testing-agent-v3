@@ -32,12 +32,9 @@ public final class SuiteExecutionEngine {
 
     public SuiteExecutionEngine(ObjectMapper mapper, AgentRunner runner, int parallelism,
                                 EnvironmentManager environments, EnvironmentProfile profile) {
-        if (mapper == null)
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "ObjectMapper cannot be null");
-        if (runner == null)
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "Runner cannot be null");
-        if (parallelism < 1)
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "Parallelism must be at least 1");
+        if (mapper == null) throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "ObjectMapper cannot be null");
+        if (runner == null) throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "Runner cannot be null");
+        if (parallelism < 1) throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "Parallelism must be at least 1");
         this.mapper = mapper;
         this.runner = runner;
         this.parallelism = parallelism;
@@ -71,16 +68,11 @@ public final class SuiteExecutionEngine {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new AgentExecutionException(
-                    AgentExecutionException.Category.INFRASTRUCTURE,
-                    "Suite execution was interrupted",
-                    e);
+            throw new AgentExecutionException(AgentExecutionException.Category.INFRASTRUCTURE, "Suite execution was interrupted", e);
         } finally {
             executor.shutdown();
             try {
-                if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
-                    executor.shutdownNow();
-                }
+                if (!executor.awaitTermination(30, TimeUnit.SECONDS)) executor.shutdownNow();
             } catch (InterruptedException e) {
                 executor.shutdownNow();
                 Thread.currentThread().interrupt();
@@ -112,25 +104,16 @@ public final class SuiteExecutionEngine {
         try {
             plan = mapper.readValue(Files.readString(resolved), TestPlan.class);
         } catch (Exception e) {
-            throw new AgentExecutionException(
-                    AgentExecutionException.Category.PLAN_VALIDATION,
-                    "Invalid test plan JSON: " + resolved,
-                    e);
+            throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Invalid test plan JSON: " + resolved, e);
         }
-        if (environments != null && profile != null) {
-            environments.apply(plan, profile);
-        }
+        if (environments != null && profile != null) environments.apply(plan, profile);
         ExecutionResult result = runner.execute(plan);
         if (!result.passed()) {
-            try {
-                runner.analyzeFailure(plan, result);
-            } catch (Exception e) {
-                result.failureAnalysis("AI failure analysis unavailable: " + e.getMessage());
-            }
+            try { runner.analyzeFailure(plan, result); }
+            catch (Exception e) { result.failureAnalysis("AI failure analysis unavailable: " + e.getMessage()); }
         }
-        return new SuiteExecutionResult.TestExecution(
-                index, planFile, plan.name, result.passed() ? "PASS" : "FAIL",
-                System.currentTimeMillis() - started, result);
+        return new SuiteExecutionResult.TestExecution(index, planFile, plan.name,
+                result.passed() ? "PASS" : "FAIL", System.currentTimeMillis() - started, result);
     }
 
     private SuiteExecutionResult.TestExecution failedInfrastructureResult(int index, String file, Throwable e) {
@@ -148,38 +131,37 @@ public final class SuiteExecutionEngine {
     }
 
     private AgentExecutionException.Category categoryOf(Throwable e) {
-        if (e instanceof AgentExecutionException a) return a.category();
-        return AgentExecutionException.Category.INFRASTRUCTURE;
+        return e instanceof AgentExecutionException a ? a.category() : AgentExecutionException.Category.INFRASTRUCTURE;
     }
 
     private void validateSuite(TestSuite suite, Path dir) {
-        if (suite == null)
-            throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION, "Suite cannot be null");
-        if (suite.plans == null || suite.plans.isEmpty())
-            throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION, "Suite contains no plans");
-        if (dir == null)
-            throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION, "Suite directory is required");
+        if (suite == null) throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION, "Suite cannot be null");
+        if (suite.plans == null || suite.plans.isEmpty()) throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION, "Suite contains no plans");
+        if (dir == null) throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION, "Suite directory is required");
         for (String file : suite.plans) {
-            if (file == null || file.isBlank())
-                throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION, "Suite contains a blank plan path");
+            if (file == null || file.isBlank()) throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION, "Suite contains a blank plan path");
             resolvePlan(dir, file);
         }
     }
 
+    /**
+     * Resolves a plan relative to the suite directory. Paths may legitimately use
+     * ../ to reference sibling directories such as ../plans, but may not escape the
+     * execution workspace. This preserves repository organization while retaining
+     * path-traversal protection.
+     */
     private Path resolvePlan(Path dir, String file) {
-        Path suiteRoot = dir.toAbsolutePath().normalize();
-        Path repositoryRoot = Path.of(".").toAbsolutePath().normalize();
-        Path resolved = suiteRoot.resolve(file).normalize();
-
-        // Suite files may reference sibling repository directories, e.g.
-        // examples/suites/../plans/api/v3-plan-file.json. The old check used
-        // suiteRoot as the security boundary and incorrectly rejected that valid layout.
-        if (!resolved.startsWith(repositoryRoot))
+        Path root = dir.toAbsolutePath().normalize();
+        Path resolved = root.resolve(file).normalize();
+        Path workspace = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        if (!resolved.startsWith(workspace)) {
             throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION,
                     "Plan path escapes repository root: " + file);
-        if (!Files.isRegularFile(resolved))
+        }
+        if (!Files.isRegularFile(resolved)) {
             throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION,
                     "Plan file not found: " + resolved);
+        }
         return resolved;
     }
 }
