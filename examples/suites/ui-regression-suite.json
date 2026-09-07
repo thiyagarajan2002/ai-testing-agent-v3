@@ -1,0 +1,9 @@
+{
+  "name": "UI Regression Examples",
+  "plans": [
+    "../plans/ui/01-navigation.json",
+    "../plans/ui/02-login.json",
+    "../plans/ui/03-search-and-cart.json",
+    "../plans/ui/04-negative-login.json"
+  ]
+}
