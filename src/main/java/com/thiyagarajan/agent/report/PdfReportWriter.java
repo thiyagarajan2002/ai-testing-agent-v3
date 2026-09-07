@@ -4,7 +4,6 @@ import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Paragraph;
-import com.itextpdf.layout.element.Text;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.UnitValue;
 import com.thiyagarajan.agent.runtime.ExecutionResult;
@@ -22,7 +21,8 @@ public final class PdfReportWriter {
         try (PdfWriter writer = new PdfWriter(file.toString());
              PdfDocument pdf = new PdfDocument(writer);
              Document document = new Document(pdf)) {
-            document.add(new Paragraph(new Text("AI Testing Agent Execution Report").setBold()).setFontSize(18));
+            Paragraph heading = new Paragraph("AI Testing Agent Execution Report").setFontSize(18);
+            document.add(heading);
             document.add(new Paragraph("Test: " + text(result.testName)));
             document.add(new Paragraph("Status: " + (result.passed ? "PASS" : "FAIL")));
             document.add(new Paragraph("Steps: " + result.steps.size()));
