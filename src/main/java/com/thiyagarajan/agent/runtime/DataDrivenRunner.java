@@ -63,8 +63,7 @@ public final class DataDrivenRunner {
     }
 
     private List<Map<String, String>> readRows(Path file) throws Exception {
-        String text = Files.readString(file);
-        JsonNode root = mapper.readTree(text);
+        JsonNode root = mapper.readTree(Files.readString(file));
         JsonNode rows = root.isArray() ? root : root.get("rows");
         if (rows == null || !rows.isArray()) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Data file must contain a JSON array or {\"rows\": [...]}");
         List<Map<String, String>> out = new ArrayList<>();
@@ -92,13 +91,14 @@ public final class DataDrivenRunner {
             if (s.query != null) s.query.replaceAll((k, v) -> replace(v, row));
             if (s.save != null) s.save.replaceAll((k, v) -> replace(v, row));
             if (s.assertSpec != null) {
-                if (s.assertSpec.contains != null) s.assertSpec.contains = replace(s.assertSpec.contains, row);
-                if (s.assertSpec.jsonPath != null) s.assertSpec.jsonPath = replace(s.assertSpec.jsonPath, row);
-                if (s.assertSpec.equals != null) s.assertSpec.equals = replace(s.assertSpec.equals, row);
+                s.assertSpec.contains = replace(s.assertSpec.contains, row);
+                s.assertSpec.jsonPath = replace(s.assertSpec.jsonPath, row);
+                s.assertSpec.equals = replace(s.assertSpec.equals, row);
             }
             if (s.assertions != null) for (var a : s.assertions) {
                 if (a == null) continue;
-                a.value = replace(a.value, row); a.path = replace(a.path, row); a.regex = replace(a.regex, row);
+                a.path = replace(a.path, row);
+                a.expected = replace(a.expected, row);
             }
         }
     }
