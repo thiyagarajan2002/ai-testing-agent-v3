@@ -56,18 +56,15 @@ class SuiteExecutionEngineTest {
     @Test
     void rejectsPlanPathOutsideSuiteWorkspace() throws Exception {
         Path dir = Files.createTempDirectory("suite-path-");
-        Path outside = dir.getParent().getParent().resolve("outside-suite-plan.json").toAbsolutePath().normalize();
-        Files.writeString(outside, "{\"name\":\"outside\",\"type\":\"API\",\"baseUrl\":\"http://localhost\",\"steps\":[{\"action\":\"GET\",\"path\":\"/\"}]}" );
 
         TestSuite suite = new TestSuite();
-        suite.plans.add("../../" + outside.getFileName());
+        suite.plans.add("../../outside-suite-plan.json");
 
         AgentRunner runner = new AgentRunner((OllamaClient) null, new ObjectMapper());
         AgentExecutionException error = assertThrows(AgentExecutionException.class,
                 () -> new SuiteExecutionEngine(new ObjectMapper(), runner, 2).execute(suite, dir));
         assertEquals(AgentExecutionException.Category.SUITE_VALIDATION, error.category());
         assertTrue(error.getMessage().contains("escapes suite workspace"));
-        Files.deleteIfExists(outside);
     }
 
     @Test
