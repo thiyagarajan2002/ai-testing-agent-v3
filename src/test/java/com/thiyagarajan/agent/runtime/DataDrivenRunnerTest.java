@@ -28,7 +28,8 @@ class DataDrivenRunnerTest {
             assertEquals(0, result.passedIterations);
             assertFalse(result.iterations.get(0).passed);
             assertNotNull(result.iterations.get(0).execution);
-            assertTrue(result.iterations.get(0).execution.failureAnalysis().contains("localhost"));
+            assertEquals(1, result.iterations.get(0).execution.steps.size());
+            assertTrue(result.iterations.get(0).execution.steps.get(0).details.contains("/users/42"));
         } finally {
             Files.deleteIfExists(file);
         }
