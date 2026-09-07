@@ -1,0 +1,21 @@
+{
+  "name": "API Extract And Reuse Variable",
+  "type": "API",
+  "baseUrl": "https://httpbin.org",
+  "steps": [
+    {
+      "action": "GET",
+      "path": "/anything/session",
+      "assertSpec": {"status": 200},
+      "save": {"origin": "url"},
+      "timeoutMs": 30000
+    },
+    {
+      "action": "GET",
+      "path": "/anything/reused",
+      "query": {"from": "${origin}"},
+      "assertSpec": {"status": 200, "contains": "reused"},
+      "timeoutMs": 30000
+    }
+  ]
+}
