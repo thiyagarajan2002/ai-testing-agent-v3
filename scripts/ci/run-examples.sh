@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# CI smoke runner for every repository example.
-# Requirement text files are validated as input fixtures; JSON examples are executed.
+# CI smoke runner for the organized repository layout.
+# Requirements are validated as fixtures; runnable JSON plans/suites are exercised explicitly.
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
@@ -20,16 +20,16 @@ run_plan() {
 }
 
 echo "Validating requirement fixtures..."
-for file in examples/api-requirement.txt examples/ui-requirement.txt; do
+for file in examples/requirements/api-requirement.txt examples/requirements/ui-requirement.txt; do
   test -s "$file"
   echo "OK: $file"
 done
 
-echo "Validating all JSON examples..."
+echo "Validating all JSON examples recursively..."
 python3 - <<'PY'
 import json
 from pathlib import Path
-for path in sorted(Path("examples").glob("*.json")):
+for path in sorted(Path("examples").rglob("*.json")):
     with path.open(encoding="utf-8") as fh:
         data = json.load(fh)
     if not isinstance(data, dict):
@@ -37,26 +37,24 @@ for path in sorted(Path("examples").glob("*.json")):
     print(f"OK: {path}")
 PY
 
-# v3 direct plan execution.
-run_plan "v3 plan" "examples/v3-plan-file.json"
+# v3 direct plan.
+run_plan "v3 plan" "examples/plans/api/v3-plan-file.json"
 
-# v3 suite execution. The suite references the v3 plan and therefore exercises
-# suite orchestration, reporting, history, comparison, and analytics as well.
+# v3 suite.
 echo "============================================================"
 echo "EXAMPLE: v3 suite"
-echo "FILE: examples/v3-suite.json"
+echo "FILE: examples/suites/v3-suite.json"
 echo "============================================================"
 mvn -B --no-transfer-progress -DskipTests exec:java \
   -Dexec.mainClass=com.thiyagarajan.agent.Main \
-  -Dexec.args="suite examples/v3-suite.json"
+  -Dexec.args="suite examples/suites/v3-suite.json"
 
-# v2 keeps API and UI examples in one envelope. Extract both plans and execute
-# them through the current v3 runner so the legacy example remains continuously verified.
+# v2 legacy envelope: extract API/UI plans and execute through the current v3 runner.
 mkdir -p target/ci-examples
 python3 - <<'PY'
 import json
 from pathlib import Path
-source = Path("examples/v2-execution.json")
+source = Path("examples/legacy/v2-execution.json")
 data = json.loads(source.read_text(encoding="utf-8"))
 for key in ("api", "ui"):
     value = data.get(key)
