@@ -24,11 +24,11 @@ public final class SecurityRedactor {
     public static String redactText(String input) {
         if (input == null || input.isEmpty()) return input;
         String out = input;
-        out = JSON_SECRET.matcher(out).replaceAll(Matcher.quoteReplacement("$1") + MASK + Matcher.quoteReplacement("$3"));
-        out = HEADER_SECRET.matcher(out).replaceAll(Matcher.quoteReplacement("$1") + MASK);
-        out = KEY_VALUE_SECRET.matcher(out).replaceAll(Matcher.quoteReplacement("$1") + MASK);
-        out = BEARER.matcher(out).replaceAll(Matcher.quoteReplacement("$1") + MASK);
-        out = BASIC.matcher(out).replaceAll(Matcher.quoteReplacement("$1") + MASK);
+        out = JSON_SECRET.matcher(out).replaceAll("$1" + MASK + "$3");
+        out = HEADER_SECRET.matcher(out).replaceAll("$1" + MASK);
+        out = KEY_VALUE_SECRET.matcher(out).replaceAll("$1" + MASK);
+        out = BEARER.matcher(out).replaceAll("$1" + MASK);
+        out = BASIC.matcher(out).replaceAll("$1" + MASK);
         return redactEnvironmentSecrets(out);
     }
 
