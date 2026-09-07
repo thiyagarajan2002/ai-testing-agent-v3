@@ -4,9 +4,11 @@ All notable project changes are documented here at release level. The complete i
 
 ## 3.21.0
 
-- Added multiple API example plans for GET, POST and response-variable chaining.
-- Added multiple UI example plans for navigation, login, product flow and negative login validation.
-- Added dedicated API and UI example suites.
+- Expanded `examples/` into a multi-scenario API, UI, suite and data-driven example catalog.
+- Added API examples for POST, PUT, DELETE, query parameters, custom headers and negative status validation.
+- Added UI examples for navigation, login, product/cart interaction and negative login validation.
+- Added dedicated API regression, UI regression and full regression suites.
+- Added a runnable JSON data-driven users example.
 - Added automatic full-page screenshot capture after every successful UI step.
 - Added automatic failure screenshots for failed UI steps.
 - Added durable per-test API logs containing request, response, assertion and error details.
@@ -14,6 +16,7 @@ All notable project changes are documented here at release level. The complete i
 - Added API-oriented terminal logs under `reports/api/logs/` and UI interactive logs under `reports/ui/logs/`.
 - Added redaction before API execution details are persisted.
 - Kept the explicit `screenshot` UI action backward compatible while making per-step evidence automatic.
+- Updated `PROJECT_DETAILS.md` and `examples/README.md` with run commands and evidence locations.
 
 ## 3.20.0
 
