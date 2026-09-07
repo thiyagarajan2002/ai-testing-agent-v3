@@ -95,9 +95,13 @@ Each `execute(plan)` call creates the API or UI executor for that test, keeping 
 
 Coordinates file loading, environment application, plan/suite/data-driven execution, reporting, validation and history. Important methods include `executePlan`, `executeSuite`, `executeDataDriven`, `validatePlan`, `validateSuite`, `plan`, `execute`, `analyzeIfFailed`, and `writeReport`.
 
+The optional environment profile is loaded through an internal exception-safe helper so checked exceptions from `EnvironmentManager.load()` do not escape the constructor. Environment loading failures are converted to `CONFIGURATION` errors.
+
 ## 7. Preflight validation
 
 `TestPlanValidator` is shared by CLI validation and runtime execution. It validates plan type, base URL, steps, actions, timeout and retry settings and produces errors/warnings.
+
+Validation errors are step-aware. For example, an invalid retry count is reported as `Step 1: retryCount cannot be negative`, making the failing plan location explicit.
 
 `validate plan` and `validate suite` do not send API requests, launch browsers, contact Ollama or execute tests.
 
@@ -144,6 +148,8 @@ userId,expectedName
 ### Filtering
 
 `--filter key=value` performs exact string matching. Multiple filters are ANDed. Filtering occurs before worker creation. No matching rows is a `PLAN_VALIDATION` failure.
+
+A data-driven iteration that reaches the execution layer and fails is represented as a failed `IterationResult`; execution failures are not incorrectly converted into an orchestration exception. Dataset/plan input errors remain explicit `AgentExecutionException` failures.
 
 ## 9. v3.19.0 — Data-driven parallel execution & performance
 
@@ -210,7 +216,7 @@ Playwright execution supports navigation and actions/assertions including `navig
 
 ## 13. Retry behavior
 
-A step-level `retryCount` overrides global `RETRIES`. Negative retry counts are rejected.
+A step-level `retryCount` overrides global `RETRIES`. Negative retry counts are rejected before execution, with the step number included in the validation message.
 
 ## 14. Failure artifacts
 
@@ -260,9 +266,18 @@ INFRASTRUCTURE
 
 GitHub Actions performs Java 21 setup, compile, Playwright/Chromium installation, Maven verification, example execution/validation and report/artifact upload. Compilation occurs before the Playwright CLI is invoked so a clean runner has the required classes available.
 
-## 20. Version history
+## 20. v3.19.0 maintenance fixes
 
-- v3.19.0 — bounded parallel data-driven execution, ordered results, performance metrics and CLI worker override
+The first CI/test pass exposed two stale assumptions in the test suite:
+
+1. `PlanValidationTest` expected the old unqualified retry error. The validator intentionally provides a step-aware message, so the test now verifies `Step 1: retryCount cannot be negative`.
+2. `DataDrivenRunnerTest` expected a runtime execution failure to throw `AgentExecutionException`. The runtime contract is to return a failed `ExecutionResult` for an executed test failure. The test now uses an isolated capturing `AgentRunner` to deterministically verify `${data.id}` substitution and adds coverage for the no-filter-match validation path.
+
+These are test-contract corrections; no production behavior was weakened to make the tests pass.
+
+## 21. Version history
+
+- v3.19.0 — bounded parallel data-driven execution, ordered results, performance metrics and CLI worker override; CI/test contract fixes
 - v3.18.0 — CSV datasets, dataset validation and exact row filtering
 - v3.17.0 — data-driven reporting and HTML dashboard
 - v3.16.0 — data-driven / parameterized execution
@@ -281,7 +296,7 @@ GitHub Actions performs Java 21 setup, compile, Playwright/Chromium installation
 - v3.3.0 — advanced reporting
 - v3.2.0 — retry support
 
-## 21. Development/release rule
+## 22. Development/release rule
 
 For every release:
 
