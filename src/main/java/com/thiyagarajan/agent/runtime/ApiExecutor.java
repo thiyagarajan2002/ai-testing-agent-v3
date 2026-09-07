@@ -17,6 +17,7 @@ public class ApiExecutor {
     private final Map<String, String> variables = new ConcurrentHashMap<>();
     private final Config config;
     private final FailureArtifactManager artifacts;
+    private final ApiAssertionEngine assertionEngine = new ApiAssertionEngine();
 
     public ApiExecutor() { this(Config.load()); }
     public ApiExecutor(Config config) { this.config = config; this.artifacts = new FailureArtifactManager(config); }
@@ -58,10 +59,10 @@ public class ApiExecutor {
                         default -> throw new IllegalArgumentException("Unsupported API action: " + step.action);
                     };
                     long attemptDuration = System.currentTimeMillis() - attemptStart;
-                    boolean ok = validate(response, step, attemptDuration);
+                    var assertionFailures = assertionEngine.validate(response, step, attemptDuration, this::substitute);
                     String details = "HTTP " + response.statusCode() + "; attempt=" + attempt + "/" + maxAttempts
                             + "; attempts=" + attempt + "; durationMs=" + attemptDuration;
-                    if (ok) {
+                    if (assertionFailures.isEmpty()) {
                         if (step.save != null) {
                             Map<String, String> extracted = new LinkedHashMap<>();
                             for (var entry : step.save.entrySet()) {
@@ -70,7 +71,6 @@ public class ApiExecutor {
                                 extracted.put(entry.getKey(), String.valueOf(value));
                             }
                             extracted.forEach(variables::put);
-                            extracted.keySet().forEach(k -> {});
                             if (!extracted.isEmpty()) details += "; saved=" + String.join(",", extracted.keySet());
                         }
                         details += "; totalDurationMs=" + (System.currentTimeMillis() - stepStart)
@@ -78,9 +78,10 @@ public class ApiExecutor {
                         result.steps.add(new ExecutionResult.StepResult(step.action, true, details, System.currentTimeMillis() - stepStart));
                         completed = true; break;
                     }
+                    details += "; assertionFailures=" + String.join(" | ", assertionFailures)
+                            + "; totalDurationMs=" + (System.currentTimeMillis() - stepStart)
+                            + "; response=" + abbreviate(response.asString(), 1000);
                     if (attempt == maxAttempts) {
-                        details += "; totalDurationMs=" + (System.currentTimeMillis() - stepStart)
-                                + "; response=" + abbreviate(response.asString(), 1000);
                         String artifact = createFailureArtifact(plan.name, index, step, url, body, details, response.asString());
                         result.steps.add(new ExecutionResult.StepResult(step.action, false, details, System.currentTimeMillis() - stepStart,
                                 artifact == null ? java.util.List.of() : java.util.List.of(artifact)));
@@ -108,17 +109,6 @@ public class ApiExecutor {
         catch (Exception ignored) { return null; }
     }
 
-    private boolean validate(Response response, TestStep step, long durationMs) {
-        var assertion = step.assertSpec; if (assertion == null) return true; boolean ok = true;
-        if (assertion.status != null) ok &= response.statusCode() == assertion.status;
-        if (assertion.contains != null && !assertion.contains.isBlank()) ok &= response.asString().contains(substitute(assertion.contains));
-        if (assertion.jsonPath != null && !assertion.jsonPath.isBlank()) {
-            Object actual = response.jsonPath().get(assertion.jsonPath); ok &= actual != null;
-            if (assertion.equals != null) ok &= String.valueOf(actual).equals(substitute(assertion.equals));
-        }
-        if (assertion.responseTimeMs != null) ok &= durationMs <= assertion.responseTimeMs;
-        return ok;
-    }
     private Map<String, String> substituteMap(Map<String, String> source) { Map<String, String> out = new LinkedHashMap<>(); source.forEach((k,v)->out.put(substitute(k),substitute(v))); return out; }
     private String buildUrl(String base, String path, Map<String,String> query) {
         String target=path==null?"":path; String url=target.startsWith("http://")||target.startsWith("https://")?target:base.replaceAll("/$","")+"/"+target.replaceFirst("^/","");
