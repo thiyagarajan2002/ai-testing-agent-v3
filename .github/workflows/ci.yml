@@ -14,6 +14,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      HEADLESS: 'true'
+      PARALLELISM: '4'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,14 +28,8 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Install Playwright browsers
-        run: mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
-
       - name: Build and test
-        run: mvn -B clean verify
-        env:
-          HEADLESS: 'true'
-          PARALLELISM: '4'
+        run: mvn -B --no-transfer-progress clean verify
 
       - name: Upload test reports
         if: always()
