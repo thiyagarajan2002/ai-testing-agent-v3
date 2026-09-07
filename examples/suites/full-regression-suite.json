@@ -1,0 +1,12 @@
+{
+  "name": "Full API and UI Regression Examples",
+  "plans": [
+    "../plans/api/get-user.json",
+    "../plans/api/02-post.json",
+    "../plans/api/03-put.json",
+    "../plans/api/04-delete.json",
+    "../plans/ui/01-navigation.json",
+    "../plans/ui/02-login.json",
+    "../plans/ui/04-negative-login.json"
+  ]
+}
