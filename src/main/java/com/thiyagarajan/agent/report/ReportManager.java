@@ -10,18 +10,27 @@ import java.util.stream.Collectors;
 
 public class ReportManager {
     private final Path dir;
+    private final Path reportRoot;
     private final ExecutionLogWriter logWriter = new ExecutionLogWriter();
     private final PdfReportWriter pdfWriter = new PdfReportWriter();
 
-    public ReportManager() throws Exception { this(Path.of(Config.load().reportsDir())); }
+    public ReportManager() throws Exception {
+        this(Path.of(Config.load().reportsDir()));
+    }
+
     public ReportManager(Path directory) throws Exception {
         if (directory == null) throw new IllegalArgumentException("Report directory cannot be null");
-        dir = directory; Files.createDirectories(dir);
+        dir = directory.toAbsolutePath().normalize();
+        reportRoot = Path.of(Config.load().reportsDir()).toAbsolutePath().normalize();
+        Files.createDirectories(dir);
     }
 
     public void writeAll(ExecutionResult result) throws Exception {
         if (result == null) throw new IllegalArgumentException("Execution result cannot be null");
-        writeHtml(result); writeCsv(result); pdfWriter.write(result, dir.resolve("report.pdf")); logWriter.write(result, dir);
+        writeHtml(result);
+        writeCsv(result);
+        pdfWriter.write(result, dir.resolve("report.pdf"));
+        logWriter.write(result, dir);
     }
 
     private void writeHtml(ExecutionResult r) throws Exception {
@@ -30,7 +39,7 @@ public class ReportManager {
         long duration = r.steps.stream().mapToLong(s -> s.durationMs).sum();
         String rows = r.steps.stream().map(s -> {
             String artifacts = s.artifacts == null || s.artifacts.isEmpty() ? "" : "<br><b>Artifacts:</b> " + s.artifacts.stream()
-                    .map(a -> "<a href=\"" + esc(a) + "\">" + esc(a) + "</a>").collect(Collectors.joining(", "));
+                    .map(a -> "<a href=\"" + esc(artifactLink(a)) + "\">" + esc(a) + "</a>").collect(Collectors.joining(", "));
             return "<tr><td>" + esc(s.action) + "</td><td>" + (s.passed ? "PASS" : "FAIL") + "</td><td>" + s.durationMs
                     + "</td><td>" + esc(s.details) + artifacts + "</td></tr>";
         }).collect(Collectors.joining());
@@ -55,6 +64,17 @@ public class ReportManager {
                     + "," + csv(s.details) + "," + csv(s.artifacts == null ? "" : String.join(" | ", s.artifacts)) + "\n");
         }
     }
+
+    private String artifactLink(String artifact) {
+        if (artifact == null || artifact.isBlank()) return "";
+        try {
+            Path target = Path.of(artifact).toAbsolutePath().normalize();
+            if (target.startsWith(dir)) return dir.relativize(target).toString().replace('\\', '/');
+            if (target.startsWith(reportRoot)) return dir.relativize(target).toString().replace('\\', '/');
+        } catch (Exception ignored) { }
+        return artifact.replace('\\', '/');
+    }
+
     private String csv(String s) { return s == null ? "" : "\"" + s.replace("\"", "\"\"").replace("\n", " ") + "\""; }
     private String esc(String s) { return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;"); }
 }
