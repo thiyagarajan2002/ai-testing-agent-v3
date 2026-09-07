@@ -4,7 +4,7 @@
 
 AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama planning with REST Assured API execution, Playwright UI execution, JSON/CSV data-driven testing, environment profiles, assertions, retries, failure artifacts, HTML/JSON/CSV/PDF reporting, suite execution, history/analytics, security redaction, CI automation, and non-executing preflight validation.
 
-**Current version: 3.20.0**
+**Current version: 3.21.0**
 
 ## 2. Technology stack
 
@@ -25,33 +25,29 @@ AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI te
 ```text
 ai-testing-agent-v3/
 ├── .github/                     # CI/CD and repository automation
-├── config/
-│   ├── environments/            # Environment profiles
-│   └── test-data/                # Reusable test data
-├── docs/
-│   ├── architecture/             # Architecture and package boundaries
-│   ├── configuration/            # Configuration guidance
-│   ├── testing/                  # Testing standards
-│   └── releases/                 # Release documentation
+├── config/                      # Environment profiles and reusable test data
+├── docs/                        # Architecture, configuration, testing and releases
 ├── examples/
-│   ├── plans/api/                # API plans
-│   ├── plans/data-driven/        # Data-driven plans
-│   ├── suites/                   # Suite examples
-│   ├── data/json/                # JSON datasets
-│   ├── requirements/             # Natural-language requirements
-│   └── legacy/                   # Earlier-release compatibility examples
-├── scripts/ci/                   # CI helper scripts
+│   ├── plans/api/               # API examples
+│   ├── plans/ui/                # UI examples
+│   ├── plans/data-driven/       # Data-driven plans
+│   ├── suites/                  # API/UI suite examples
+│   ├── data/json/               # JSON datasets
+│   ├── requirements/            # Natural-language requirements
+│   └── legacy/                  # Earlier-release compatibility examples
+├── scripts/ci/                  # CI helper scripts
 ├── src/main/java/com/thiyagarajan/agent/
 │   ├── Main.java
 │   ├── ai/
 │   ├── config/
+│   ├── io/                      # Durable execution logging
 │   ├── model/
 │   ├── report/
 │   └── runtime/
-├── src/main/resources/            # Runtime classpath resources
+├── src/main/resources/          # Runtime classpath resources
 ├── src/test/java/com/thiyagarajan/agent/
-├── src/test/resources/            # Test-only fixtures
-├── reports/                       # Generated runtime output
+├── src/test/resources/          # Test-only fixtures
+├── reports/                     # Generated runtime output
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 ├── README.md
@@ -90,7 +86,7 @@ mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromiu
 | `RETRIES` | `0` | Default API retry count |
 | `PARALLELISM` | `4` | Suite and default data-driven worker count |
 | `REPORTS_DIR` | `reports` | Report/history root |
-| `SCREENSHOTS_DIR` | `screenshots` | Failure artifact root |
+| `SCREENSHOTS_DIR` | `screenshots` | Screenshot root |
 
 `Config` validates URLs, model name, timeout, retries, parallelism and output directories. Invalid integer configuration values fail explicitly.
 
@@ -117,128 +113,121 @@ Each `execute(plan)` call creates the API or UI executor for that test, keeping 
 
 Coordinates file loading, environment application, plan/suite/data-driven execution, reporting, validation and history. Important methods include `executePlan`, `executeSuite`, `executeDataDriven`, `validatePlan`, `validateSuite`, `plan`, `execute`, `analyzeIfFailed`, and `writeReport`.
 
-The optional environment profile is loaded through an internal exception-safe helper so checked exceptions from `EnvironmentManager.load()` do not escape the constructor. Environment loading failures are converted to `CONFIGURATION` errors.
-
 ## 7. Preflight validation
 
 `TestPlanValidator` is shared by CLI validation and runtime execution. It validates plan type, base URL, steps, actions, timeout and retry settings and produces errors/warnings.
 
-Validation errors are step-aware. For example, an invalid retry count is reported as `Step 1: retryCount cannot be negative`, making the failing plan location explicit.
+Validation errors are step-aware. For example, an invalid retry count is reported as `Step 1: retryCount cannot be negative`.
 
 `validate plan` and `validate suite` do not send API requests, launch browsers, contact Ollama or execute tests.
 
-Suite validation also checks referenced files, rejects blank paths, blocks paths escaping the suite directory and validates each referenced plan.
-
-Exit codes:
-
-```text
-0 = successful
-1 = test/validation failure
-2 = configuration/infrastructure error
-```
+Suite validation checks referenced files, rejects blank paths, allows sibling plan directories inside the suite workspace and blocks paths escaping that workspace.
 
 ## 8. Data-driven execution
 
-### Dataset formats
+JSON root arrays, JSON `rows` objects and CSV datasets are supported. `${data.key}` can be used throughout plans. `--filter key=value` performs exact matching and multiple filters are ANDed.
 
-JSON root array:
+`DataDrivenRunner` supports bounded parallel execution with 1–64 workers, deep-copied plans, deterministic original-order results and safe executor shutdown.
 
-```json
-[{"userId":"1","expectedName":"Leanne Graham"}]
-```
+`DataDrivenExecutionResult` records execution mode, worker count, duration, estimated sequential duration, estimated speedup and average iteration duration.
 
-JSON object:
+## 9. Reporting
 
-```json
-{"rows":[{"userId":"1","expectedName":"Leanne Graham"}]}
-```
+The reporting layer supports JSON, CSV, HTML and PDF execution reports. Suite reporting aggregates test results. Data-driven reports are stored under `reports/data-driven/<safe-test-name>/`.
 
-CSV:
+Dataset values are redacted and escaped before being written to reports.
 
-```csv
-userId,expectedName
-1,Leanne Graham
-2,Ervin Howell
-```
+## 10. API execution
 
-`DataDrivenDatasetReader` validates file existence, JSON structure, CSV headers, duplicate headers, row column counts and non-empty datasets.
+`ApiExecutor` builds requests from plan values, applies headers/query/body, evaluates assertions, saves configured response values and retries according to policy.
 
-### Placeholders
+Supported assertions include status, body contains/not-contains/regex, header equality, JSONPath exists/equality/contains/regex, response time and legacy `assertSpec` assertions.
 
-`${data.key}` can be used in plan name, base URL, variables, path, locator, value, body, headers, query, saved variables and assertions.
+### API execution logs — v3.21.0
 
-### Filtering
-
-`--filter key=value` performs exact string matching. Multiple filters are ANDed. Filtering occurs before worker creation. No matching rows is a `PLAN_VALIDATION` failure.
-
-A data-driven iteration that reaches the execution layer and fails is represented as a failed `IterationResult`; execution failures are not incorrectly converted into an orchestration exception. Dataset/plan input errors remain explicit `AgentExecutionException` failures.
-
-## 9. v3.19.0 — Data-driven parallel execution & performance
-
-`DataDrivenRunner.execute(template,dataFile,filters,parallelism)` supports bounded parallel execution using a fixed worker pool.
-
-Rules:
-
-- `1` worker means sequential execution.
-- `2–64` workers enable bounded parallel execution.
-- Values above the selected row count are reduced to the row count.
-- Invalid values outside `1–64` are rejected.
-- Every iteration receives a deep-copied `TestPlan` before data substitution.
-- Iterations execute independently through `AgentRunner`.
-- Worker completion order does not affect report order; results are restored to original dataset order.
-- The worker pool is shut down in a `finally` block.
-- Interrupted callers restore the interrupt flag.
-
-CLI example:
-
-```bash
-mvn exec:java -Dexec.args="data-driven plan.json users.csv --parallelism 8"
-```
-
-Override the configured `PARALLELISM` only for one data-driven run with `--parallelism N`.
-
-### Performance metrics
-
-`DataDrivenExecutionResult` now records:
-
-- `executionMode` — `SEQUENTIAL` or `PARALLEL`.
-- `parallelism` — actual worker count.
-- `durationMs` — wall-clock duration.
-- `estimatedSequentialDurationMs` — sum of measured iteration durations.
-- `estimatedSpeedup` — estimated sequential work divided by wall-clock duration.
-- `averageIterationDurationMs()` — average measured iteration duration.
-
-Speedup is an estimate, not a benchmark guarantee; network latency, browsers, scheduling, test infrastructure and report generation affect the result.
-
-## 10. Reporting
-
-`DataDrivenReportManager` writes:
+Every API test attempts to create a durable log under:
 
 ```text
-reports/data-driven/<safe-test-name>/data-driven-report.html
-reports/data-driven/<safe-test-name>/data-driven-report.json
-reports/data-driven/<safe-test-name>/data-driven-report.csv
+reports/api/logs/<safe-test-name>-<timestamp>.log
 ```
 
-The dashboard includes iteration totals, pass rate, wall duration, mode, worker count, average iteration duration, estimated sequential work, estimated speedup and per-iteration diagnostics.
+Each log records:
 
-JSON dataset values are sanitized through `SecurityRedactor`; CSV/HTML dataset values are also redacted and escaped.
+- timestamp
+- step number
+- attempt number
+- HTTP action
+- request URL
+- request body
+- response status
+- response duration
+- response body (bounded)
+- errors
+- completion marker
 
-The general reporting layer supports JSON, CSV, HTML and PDF execution reports. Suite reporting aggregates test results.
+Sensitive data is redacted before API details are persisted. Logging failures never fail the API test.
 
-## 11. API execution
+## 11. UI execution
 
-API execution builds requests from plan values, applies headers/query/body, evaluates assertions, saves configured response values, retries according to retry policy and creates failure evidence.
+`UiExecutor` uses Playwright and supports:
 
-Supported advanced assertions include status, body contains/not-contains/regex, header equality, JSONPath exists/equality/contains/regex, response time, plus legacy `assertSpec` assertions.
+- `navigate`
+- `click`
+- `fill`
+- `press`
+- `selectOption`
+- `assertVisible`
+- `assertText`
+- `assertValue`
+- `waitFor`
+- `screenshot`
 
-## 12. UI execution
+### Automatic screenshot evidence — v3.21.0
 
-Playwright execution supports navigation and actions/assertions including `navigate`, `click`, `fill`, `press`, `selectOption`, `assertVisible`, `assertText`, `assertValue`, `waitFor`, and `screenshot`.
+A screenshot is automatically captured after **every successful UI step**. Failed steps also capture a failure screenshot.
+
+```text
+reports/
+└── screenshots/
+    └── ui/
+        ├── <test-name>/
+        │   ├── 001-navigate.png
+        │   ├── 002-fill.png
+        │   ├── 003-click.png
+        │   └── 004-assertvisible.png
+        └── failures/
+            └── <test-name>-step-4-failure.png
+```
+
+The screenshot path is stored in the step execution result so reporting layers can expose the evidence. Screenshots are full-page captures. The explicit `screenshot` action remains supported for backward compatibility.
+
+## 12. Terminal run logging — v3.21.0
+
+The CLI now preserves terminal output while the application is running. `RunLogManager` tees stdout and stderr to both the original terminal and a timestamped file.
+
+API-oriented commands write terminal logs to:
+
+```text
+reports/api/logs/terminal-<timestamp>-<command>.log
+```
+
+Interactive runs write to:
+
+```text
+reports/ui/logs/terminal-<timestamp>-interactive.log
+```
+
+Other commands use:
+
+```text
+reports/terminal/logs/
+```
+
+The terminal log includes the command, all application stdout/stderr and the final exit code. Closing the log restores the original console streams and closes the file safely.
 
 ## 13. Retry behavior
 
-A step-level `retryCount` overrides global `RETRIES`. Negative retry counts are rejected before execution, with the step number included in the validation message.
+A step-level `retryCount` overrides global `RETRIES`. Negative retry counts are rejected before execution, with the step number included in validation messages.
 
 ## 14. Failure artifacts
 
@@ -246,100 +235,64 @@ Failed API/UI executions can produce screenshots and API evidence under configur
 
 ## 15. Security redaction
 
-`SecurityRedactor` masks passwords, secrets, tokens, access tokens, API keys, client secrets, authorization headers, cookies and related sensitive values. Redaction is applied to execution diagnostics, reports, failure artifacts, history/analytics and AI failure-analysis prompts.
+`SecurityRedactor` masks passwords, secrets, tokens, access tokens, API keys, client secrets, authorization headers, cookies and related sensitive values. Redaction is applied to execution diagnostics, reports, failure artifacts, history/analytics, API logs and AI failure-analysis prompts.
 
-Production credentials must not be placed in datasets.
+Production credentials must not be placed in examples or datasets.
 
 ## 16. Suite execution
 
-`SuiteExecutionEngine` loads multiple plans, uses configurable parallelism, isolates test execution state, aggregates results and continues after an individual test failure. It validates suite-relative paths to prevent traversal and safely shuts down worker resources.
+`SuiteExecutionEngine` loads multiple plans, uses configurable parallelism, isolates test execution state, aggregates results and continues after an individual test failure. It validates suite-relative paths and safely shuts down worker resources.
 
 ## 17. Execution history and analytics
 
-`RunHistoryManager` stores suite runs under:
-
-```text
-reports/history/<run-id>/
-```
-
-Stable identity is `planFile + "::" + testName`.
-
-Comparison categories include `REGRESSION`, `FIXED`, `PASSED_UNCHANGED`, `FAILED_UNCHANGED`, `NEW_TEST`, and `REMOVED_TEST`.
-
-`HistoryAnalyticsManager` calculates recent execution/pass/failure totals, detects flaky tests and identifies slow tests, producing JSON/CSV/HTML analytics reports.
+`RunHistoryManager` stores suite runs under `reports/history/<run-id>/`. `HistoryAnalyticsManager` calculates recent execution/pass/failure totals, detects flaky tests and identifies slow tests, producing JSON/CSV/HTML analytics reports.
 
 ## 18. Standardized errors
 
-`AgentExecutionException` categorizes failures as:
-
-```text
-CONFIGURATION
-PLAN_VALIDATION
-SUITE_VALIDATION
-API_EXECUTION
-UI_EXECUTION
-ASSERTION
-AI_GENERATION
-REPORTING
-INFRASTRUCTURE
-```
+`AgentExecutionException` categorizes failures as `CONFIGURATION`, `PLAN_VALIDATION`, `SUITE_VALIDATION`, `API_EXECUTION`, `UI_EXECUTION`, `ASSERTION`, `AI_GENERATION`, `REPORTING` and `INFRASTRUCTURE`.
 
 ## 19. CI/CD
 
-GitHub Actions performs Java 21 setup, compile, Playwright/Chromium installation, Maven verification, example execution/validation and report/artifact upload. Compilation occurs before the Playwright CLI is invoked so a clean runner has the required classes available.
+GitHub Actions performs Java 21 setup, compile, Playwright/Chromium installation, Maven verification, example execution/validation and report/artifact upload. A release must not be described as build-verified unless Maven/CI actually completed successfully.
 
-## 20. v3.19.0 maintenance fixes
+## 20. v3.21.0 — Comprehensive examples, UI evidence and durable logs
 
-The first CI/test pass exposed two stale assumptions in the test suite:
+This release expands the example library and improves execution observability.
 
-1. `PlanValidationTest` expected the old unqualified retry error. The validator intentionally provides a step-aware message, so the test now verifies `Step 1: retryCount cannot be negative`.
-2. `DataDrivenRunnerTest` expected a runtime execution failure to throw `AgentExecutionException`. The runtime contract is to return a failed `ExecutionResult` for an executed test failure. The test now uses an isolated capturing `AgentRunner` to deterministically verify `${data.id}` substitution and adds coverage for the no-filter-match validation path.
+### New API examples
 
-These are test-contract corrections; no production behavior was weakened to make the tests pass.
+- `examples/plans/api/get-user.json`
+- `examples/plans/api/create-resource.json`
+- `examples/plans/api/save-variable.json`
+- `examples/suites/api-smoke-suite.json`
+
+### New UI examples
+
+- `examples/plans/ui/homepage-smoke.json`
+- `examples/plans/ui/login-flow.json`
+- `examples/plans/ui/search-flow.json`
+- `examples/plans/ui/negative-login.json`
+- `examples/suites/ui-smoke-suite.json`
+
+### New implementation capabilities
+
+1. API request/response/error logging.
+2. Terminal stdout/stderr persistence while preserving live console output.
+3. Automatic screenshot after every successful UI step.
+4. Automatic screenshot on UI failure.
+5. Screenshot paths attached to step results.
+6. Dedicated API/UI example documentation.
+7. Version updated to 3.21.0.
 
 ## 21. v3.20.0 — Repository organization & engineering standards
 
-This release reorganizes repository-level assets into clear ownership boundaries while preserving application behavior.
-
-### Standardized areas
-
-- Documentation is grouped into `architecture`, `configuration`, `testing` and `releases`.
-- Examples are grouped into API plans, data-driven plans, suites, datasets, requirements and legacy examples.
-- Runtime classpath resources now have a dedicated `src/main/resources/` home.
-- Test-only fixtures now have a dedicated `src/test/resources/` home.
-- `CONTRIBUTING.md` defines development and release workflow standards.
-- `SECURITY.md` defines safe handling of security reports and secrets.
-- `docs/releases/CHANGELOG.md` provides release-level change tracking.
-- The target Java package architecture is documented before undertaking an atomic package/import migration.
-
-### Target Java package architecture
-
-```text
-com.thiyagarajan.agent
-├── cli
-├── ai
-├── config
-├── model
-├── execution
-│   ├── api
-│   ├── ui
-│   ├── data
-│   └── suite
-├── validation
-├── reporting
-├── analytics
-├── security
-├── exception
-├── io
-└── util
-```
-
-The v3.20 release deliberately does not perform this Java package migration. Moving Java classes requires coordinated package declarations, imports, tests and CI changes and is therefore reserved for a dedicated controlled refactor. This avoids mixing structural repository changes with execution behavior changes.
+This release reorganized repository-level assets into clear ownership boundaries while preserving application behavior. Documentation, examples, resources, test fixtures and engineering standards were separated into dedicated locations. The target Java package architecture was documented before a future controlled package migration.
 
 ## 22. Version history
 
+- v3.21.0 — comprehensive API/UI examples, automatic UI screenshots, API execution logs and terminal log persistence
 - v3.20.0 — repository organization, documentation structure and engineering standards
-- v3.19.0 — bounded parallel data-driven execution, ordered results, performance metrics and CLI worker override; CI/test contract fixes
+- v3.19.0 — bounded parallel data-driven execution, ordered results, performance metrics and CLI worker override
 - v3.18.0 — CSV datasets, dataset validation and exact row filtering
 - v3.17.0 — data-driven reporting and HTML dashboard
 - v3.16.0 — data-driven / parameterized execution
