@@ -1,6 +1,8 @@
 package com.thiyagarajan.agent.report;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.thiyagarajan.agent.runtime.DataDrivenExecutionResult;
 import com.thiyagarajan.agent.runtime.ExecutionResult;
 import com.thiyagarajan.agent.runtime.SecurityRedactor;
@@ -8,7 +10,6 @@ import com.thiyagarajan.agent.runtime.SecurityRedactor;
 import java.io.BufferedWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /** Writes aggregate and per-iteration reports for data-driven executions. */
@@ -32,7 +33,21 @@ public final class DataDrivenReportManager {
     }
 
     private void writeJson(DataDrivenExecutionResult result) throws Exception {
-        Files.writeString(dir.resolve("data-driven-report.json"), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result));
+        JsonNode root = mapper.valueToTree(result);
+        JsonNode iterations = root.get("iterations");
+        if (iterations != null && iterations.isArray()) {
+            for (JsonNode iteration : iterations) {
+                JsonNode data = iteration.get("data");
+                if (data != null && data.isObject()) {
+                    ObjectNode object = (ObjectNode) data;
+                    object.fieldNames().forEachRemaining(key -> {
+                        if (SecurityRedactor.isSensitiveKey(key)) object.put(key, SecurityRedactor.MASK);
+                        else if (object.get(key) != null && object.get(key).isTextual()) object.put(key, SecurityRedactor.redactText(object.get(key).asText()));
+                    });
+                }
+            }
+        }
+        Files.writeString(dir.resolve("data-driven-report.json"), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(root));
     }
 
     private void writeCsv(DataDrivenExecutionResult result) throws Exception {
