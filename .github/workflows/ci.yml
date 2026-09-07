@@ -33,6 +33,12 @@ jobs:
       - name: Compile project before Playwright CLI
         run: mvn -B --no-transfer-progress clean -DskipTests compile
 
+      - name: Preflight validate repository plan
+        run: mvn -B --no-transfer-progress exec:java -Dexec.args="validate plan examples/v3-plan-file.json"
+
+      - name: Preflight validate repository suite
+        run: mvn -B --no-transfer-progress exec:java -Dexec.args="validate suite examples/v3-suite.json"
+
       - name: Install Playwright Chromium
         run: mvn -B --no-transfer-progress -DskipTests exec:java@playwright-cli -Dexec.args="install chromium"
 
