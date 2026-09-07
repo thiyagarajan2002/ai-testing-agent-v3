@@ -19,17 +19,26 @@ class DataDrivenRunnerTest {
             TestPlan plan = new ObjectMapper().readValue(
                     "{\"name\":\"T\",\"type\":\"API\",\"baseUrl\":\"http://localhost\",\"steps\":[{\"action\":\"GET\",\"path\":\"/users/${data.id}\"}]}",
                     TestPlan.class);
-            var runner = new DataDrivenRunner(new ObjectMapper(), new AgentRunner(null, new ObjectMapper()));
+            ObjectMapper mapper = new ObjectMapper();
+            TestPlan[] executed = new TestPlan[1];
+            AgentRunner capturingRunner = new AgentRunner(null, mapper) {
+                @Override
+                public ExecutionResult execute(TestPlan candidate) {
+                    executed[0] = candidate;
+                    ExecutionResult result = new ExecutionResult();
+                    result.testName = candidate.name;
+                    result.passed = true;
+                    return result;
+                }
+            };
+            var runner = new DataDrivenRunner(mapper, capturingRunner);
 
             DataDrivenExecutionResult result = runner.execute(plan, file);
 
+            assertTrue(result.passed());
             assertEquals(1, result.totalIterations);
-            assertEquals(1, result.failedIterations);
-            assertEquals(0, result.passedIterations);
-            assertFalse(result.iterations.get(0).passed);
-            assertNotNull(result.iterations.get(0).execution);
-            assertEquals(1, result.iterations.get(0).execution.steps.size());
-            assertTrue(result.iterations.get(0).execution.steps.get(0).details.contains("/users/42"));
+            assertEquals(1, result.passedIterations);
+            assertEquals("/users/42", executed[0].steps.get(0).path);
         } finally {
             Files.deleteIfExists(file);
         }
