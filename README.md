@@ -31,7 +31,21 @@ The project uses iText `9.3.0`. The available API in this dependency setup does 
 
 ## CI/CD — every push validates every example
 
-The GitHub Actions workflow runs on every push to `main`, pull requests to `main`, and manual dispatch. It installs Java 21 and Playwright Chromium, runs the complete Maven build/test gate, then executes `scripts/ci/run-examples.sh`.
+The GitHub Actions workflow runs on every push to `main`, pull requests to `main`, and manual dispatch.
+
+The pipeline now deliberately **compiles the project before invoking the Playwright Java CLI**. This prevents the previous `ClassNotFoundException: com.thiyagarajan.agent.Main` failure caused by invoking the Maven exec goal before `target/classes` had been created.
+
+CI stages:
+
+1. Checkout with `actions/checkout@v5`.
+2. Install Java 21 with `actions/setup-java@v5`.
+3. `mvn clean -DskipTests compile`.
+4. Install Chromium through the dedicated Maven `playwright-cli` execution.
+5. `mvn verify` for the full unit/integration test gate.
+6. Run `scripts/ci/run-examples.sh`.
+7. Upload reports, screenshots, Surefire results, and generated example files.
+
+### Every example is executed
 
 The example runner:
 
@@ -42,13 +56,12 @@ The example runner:
 5. Executes `examples/v3-suite.json`.
 6. Extracts and executes the API section from `examples/v2-execution.json`.
 7. Extracts and executes the UI section from `examples/v2-execution.json`.
-8. Uploads reports, screenshots, Surefire results, and generated example files as CI artifacts.
 
-The requirement `.txt` files are AI input fixtures, so CI validates their content rather than invoking Ollama. This keeps the CI build deterministic while still continuously checking every example input.
+The requirement `.txt` files are AI input fixtures, so CI validates their content rather than invoking Ollama. This keeps CI deterministic while continuously checking every repository example.
 
 ## Complete documentation
 
-`PROJECT_DETAILS.md` is the canonical detailed project guide. It documents architecture, package responsibilities, important methods, configuration, test-plan schema, assertions, retries, UI/API execution, reports, failure artifacts, security redaction, suite/history/analytics behavior, all examples, CI behavior, troubleshooting, development commands, and the rule to update documentation with every future version change.
+`PROJECT_DETAILS.md` is the canonical detailed project guide. It documents architecture, package responsibilities, important methods, configuration, test-plan schema, assertions, retries, UI/API execution, reports, failure artifacts, security redaction, suite/history/analytics behavior, all examples, CI behavior, troubleshooting, development commands, bug fixes, and the rule to update documentation with every future change.
 
 ## v3.11.0 — Test Execution History & Run Comparison
 
@@ -114,7 +127,7 @@ History / Comparison / Analytics dashboards
 | `RETRIES` | `0` | Default API retries |
 | `PARALLELISM` | `4` | Maximum suite workers |
 | `REPORTS_DIR` | `reports` | Report/history root |
-| `SCREENSHOTS_DIR` | `screenshots` | Failure-artifact directory |
+| `SCREENSHOTS_DIR` | `screenshots` | Failure-artifact root |
 
 ## Build and test
 
@@ -122,16 +135,16 @@ History / Comparison / Analytics dashboards
 mvn -B clean verify
 ```
 
+Install Chromium locally:
+
+```bash
+mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
+```
+
 Run all examples locally:
 
 ```bash
 bash scripts/ci/run-examples.sh
-```
-
-For UI execution, install Chromium first:
-
-```bash
-mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
 ```
 
 Run a plan:
@@ -146,6 +159,30 @@ Run a suite:
 mvn exec:java -Dexec.args="suite examples/v3-suite.json"
 ```
 
+## CI troubleshooting
+
+### `ClassNotFoundException: com.thiyagarajan.agent.Main`
+
+Do not invoke `exec:java` before the project has been compiled. Use the configured Playwright execution after compilation:
+
+```bash
+mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
+```
+
+The workflow follows the same order.
+
+### No artifacts found
+
+Artifact upload is intentionally `if: always()` and `if-no-files-found: ignore`. If an earlier build step fails before generating reports, no artifact is expected. Once the test/example stages run, generated output is collected automatically.
+
+### GitHub Actions Node deprecation warnings
+
+The workflow uses the current v5 releases of checkout, setup-java, and upload-artifact to avoid the older Node 20 action runtime warning. Third-party/transitive Node warnings from action internals may still appear if GitHub changes runner behavior; they are not Java project failures.
+
+### External example service failure
+
+The v2/v3 executable examples use public API/UI services. If those services are unavailable, CI correctly fails the example stage. Investigate service availability rather than hiding or skipping the example.
+
 ## Version history
 
 - v3.2.0 — Retry & resilience
@@ -158,4 +195,4 @@ mvn exec:java -Dexec.args="suite examples/v3-suite.json"
 - v3.9.0 — Advanced assertions
 - v3.10.0 — Sensitive-data redaction
 - v3.11.0 — Execution history and run comparison
-- v3.12.0 — Historical analytics, flaky-test detection, and iText PDF compatibility
+- v3.12.0 — Historical analytics, flaky-test detection, iText PDF compatibility, and CI/example execution hardening
