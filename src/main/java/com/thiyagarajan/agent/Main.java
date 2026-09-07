@@ -1,34 +1,29 @@
 package com.thiyagarajan.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.thiyagarajan.agent.ai.OllamaClient;
 import com.thiyagarajan.agent.config.Config;
-import com.thiyagarajan.agent.config.EnvironmentManager;
-import com.thiyagarajan.agent.model.EnvironmentProfile;
-import com.thiyagarajan.agent.model.TestPlan;
-import com.thiyagarajan.agent.model.TestSuite;
-import com.thiyagarajan.agent.report.ReportManager;
-import com.thiyagarajan.agent.report.SuiteReportManager;
 import com.thiyagarajan.agent.runtime.AgentExecutionException;
-import com.thiyagarajan.agent.runtime.AgentRunner;
 import com.thiyagarajan.agent.runtime.ExecutionResult;
-import com.thiyagarajan.agent.runtime.HistoryAnalyticsManager;
-import com.thiyagarajan.agent.runtime.RunHistoryManager;
-import com.thiyagarajan.agent.runtime.SuiteExecutionEngine;
+import com.thiyagarajan.agent.runtime.TestOrchestrator;
 import com.thiyagarajan.agent.runtime.SuiteExecutionResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import com.thiyagarajan.agent.model.TestPlan;
+
 import java.util.Scanner;
 
-public class Main {
-    private static final String VERSION = "3.13.0";
+/** Thin CLI entry point. Execution lifecycle is delegated to TestOrchestrator. */
+public final class Main {
+    private static final String VERSION = "3.14.0";
+
+    private Main() { }
 
     public static void main(String[] args) {
         try {
-            run(args);
+            int exitCode = run(args == null ? new String[0] : args);
+            if (exitCode != 0) System.exit(exitCode);
         } catch (AgentExecutionException e) {
             System.err.println("Agent error [" + e.category() + "]: " + e.getMessage());
-            if (e.getCause() != null) System.err.println("Cause: " + e.getCause().getMessage());
+            if (e.getCause() != null && e.getCause().getMessage() != null)
+                System.err.println("Cause: " + e.getCause().getMessage());
             System.exit(2);
         } catch (Exception e) {
             System.err.println("Agent error [INFRASTRUCTURE]: " + e.getMessage());
@@ -36,113 +31,41 @@ public class Main {
         }
     }
 
-    private static void run(String[] args) throws Exception {
+    static int run(String[] args) throws Exception {
         Config config = Config.load();
         ObjectMapper mapper = new ObjectMapper();
-        OllamaClient llm = new OllamaClient(config.ollamaUrl(), config.ollamaModel());
-        AgentRunner runner = new AgentRunner(llm, mapper);
-        ReportManager reports = new ReportManager();
-        String env = option(args, "--env");
-        EnvironmentManager environments = new EnvironmentManager(mapper);
-        EnvironmentProfile profile = env == null ? null : environments.load(env, Path.of("."));
+        String environment = option(args, "--env");
 
         if (args.length >= 2 && "plan".equalsIgnoreCase(args[0])) {
-            executeFile(args[1], mapper, runner, reports, profile, environments);
-            return;
-        }
-        if (args.length >= 2 && "suite".equalsIgnoreCase(args[0])) {
-            executeSuite(args[1], mapper, runner, config, profile, environments);
-            return;
-        }
-        System.out.println("=== AI Testing Agent v" + VERSION + " ===");
-        System.out.println("Commands: plan <file> [--env <name>] | suite <file> [--env <name>] | interactive | exit");
-        interactive(mapper, runner, reports);
-    }
-
-    private static String option(String[] args, String name) {
-        for (int i = 0; i < args.length - 1; i++) {
-            if (name.equalsIgnoreCase(args[i])) return args[i + 1];
-        }
-        return null;
-    }
-
-    private static void executeFile(String file, ObjectMapper mapper, AgentRunner runner,
-                                    ReportManager reports, EnvironmentProfile profile,
-                                    EnvironmentManager environments) throws Exception {
-        Path path = Path.of(file).toAbsolutePath().normalize();
-        if (!Files.isRegularFile(path)) {
-            throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION,
-                    "Plan file not found: " + path);
-        }
-        TestPlan plan;
-        try {
-            plan = mapper.readValue(Files.readString(path), TestPlan.class);
-        } catch (Exception e) {
-            throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION,
-                    "Invalid test plan JSON: " + path, e);
-        }
-        if (profile != null) environments.apply(plan, profile);
-        ExecutionResult result = runner.execute(plan);
-        if (!result.passed()) {
-            try {
-                runner.analyzeFailure(plan, result);
-            } catch (Exception e) {
-                result.failureAnalysis("AI failure analysis unavailable: " + e.getMessage());
+            try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, environment)) {
+                ExecutionResult result = orchestrator.executePlan(args[1]);
+                printPlanResult(result, orchestrator);
+                return result.passed() ? 0 : 1;
             }
         }
-        reports.writeAll(result);
-        System.out.println("Environment: " + (profile == null ? "default" : profile.name));
-        System.out.println("Result: " + (result.passed() ? "PASSED" : "FAILED"));
-        System.out.println("Reports written to ./reports");
-        if (!result.passed()) System.exit(1);
+
+        if (args.length >= 2 && "suite".equalsIgnoreCase(args[0])) {
+            try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, environment)) {
+                SuiteExecutionResult result = orchestrator.executeSuite(args[1]);
+                printSuiteResult(result, orchestrator);
+                return result.passed() ? 0 : 1;
+            }
+        }
+
+        if (args.length > 0 && "interactive".equalsIgnoreCase(args[0])) {
+            interactive(config, mapper, environment);
+            return 0;
+        }
+
+        printUsage();
+        return args.length == 0 ? 0 : 2;
     }
 
-    private static void executeSuite(String file, ObjectMapper mapper, AgentRunner runner,
-                                     Config config, EnvironmentProfile profile,
-                                     EnvironmentManager environments) throws Exception {
-        Path suitePath = Path.of(file).toAbsolutePath().normalize();
-        if (!Files.isRegularFile(suitePath)) {
-            throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION,
-                    "Suite file not found: " + suitePath);
-        }
-        TestSuite suite;
-        try {
-            suite = mapper.readValue(Files.readString(suitePath), TestSuite.class);
-        } catch (Exception e) {
-            throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION,
-                    "Invalid suite JSON: " + suitePath, e);
-        }
-        Path dir = suitePath.getParent() == null ? Path.of(".").toAbsolutePath() : suitePath.getParent();
-        SuiteExecutionEngine engine = new SuiteExecutionEngine(mapper, runner, config.parallelism(), environments, profile);
-        SuiteExecutionResult result = engine.execute(suite, dir);
-        Path reports = Path.of(config.reportsDir(), "suite").toAbsolutePath().normalize();
-        new SuiteReportManager(reports).writeAll(result);
-
-        try {
-            Path history = Path.of(config.reportsDir(), "history").toAbsolutePath().normalize();
-            RunHistoryManager.RecordedRun recorded = new RunHistoryManager(history).recordSuite(result);
-            HistoryAnalyticsManager.AnalyticsReport analytics = new HistoryAnalyticsManager(history).writeReports();
-            System.out.println("History run: " + recorded.runId());
-            System.out.println("Regressions: " + recorded.comparison().regressions + " | Fixed: " + recorded.comparison().fixed);
-            System.out.println("Flaky tests: " + analytics.flakyTests.size());
-            System.out.println("History dashboard: " + history.resolve("index.html"));
-            System.out.println("Analytics dashboard: " + history.resolve("analytics.html"));
-        } catch (Exception e) {
-            System.err.println("History/analytics unavailable: " + e.getMessage());
-        }
-
-        System.out.println("Suite: " + suite.name);
-        System.out.println("Environment: " + (profile == null ? "default" : profile.name));
-        System.out.println("Execution mode: parallel | threads=" + Math.min(config.parallelism(), Math.max(1, result.totalTests)));
-        System.out.println("Tests: " + result.totalTests + " | Passed: " + result.passedTests + " | Failed: " + result.failedTests);
-        System.out.println("Duration: " + result.durationMs + " ms");
-        System.out.println("Suite reports: " + reports);
-        if (!result.passed()) System.exit(1);
-    }
-
-    private static void interactive(ObjectMapper mapper, AgentRunner runner, ReportManager reports) throws Exception {
-        System.out.println("Enter a testing requirement. Type 'exit' to quit.");
-        try (Scanner scanner = new Scanner(System.in)) {
+    private static void interactive(Config config, ObjectMapper mapper, String environment) throws Exception {
+        try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, environment);
+             Scanner scanner = new Scanner(System.in)) {
+            System.out.println("=== AI Testing Agent v" + VERSION + " ===");
+            System.out.println("Enter a testing requirement. Type 'exit' to quit.");
             while (true) {
                 System.out.print("\nRequirement> ");
                 if (!scanner.hasNextLine()) break;
@@ -150,30 +73,53 @@ public class Main {
                 if ("exit".equalsIgnoreCase(requirement.trim())) break;
                 if (requirement.isBlank()) continue;
                 try {
-                    TestPlan plan = runner.plan(requirement);
+                    TestPlan plan = orchestrator.plan(requirement);
                     System.out.println("\nGenerated plan:");
                     System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(plan));
-                    ExecutionResult result = runner.execute(plan);
-                    if (!result.passed()) {
-                        try {
-                            runner.analyzeFailure(plan, result);
-                            System.out.println("AI analysis: " + result.failureAnalysis());
-                        } catch (Exception e) {
-                            System.err.println("AI failure analysis unavailable: " + e.getMessage());
-                        }
-                    }
-                    reports.writeAll(result);
-                    System.out.println("\nResult: " + (result.passed() ? "PASSED" : "FAILED"));
-                    System.out.println("Reports written to ./reports");
+                    ExecutionResult result = orchestrator.execute(plan);
+                    orchestrator.analyzeIfFailed(plan, result);
+                    orchestrator.writeReport(result);
+                    printPlanResult(result, orchestrator);
+                } catch (AgentExecutionException e) {
+                    System.err.println("Agent error [" + e.category() + "]: " + e.getMessage());
                 } catch (Exception e) {
-                    System.err.println("Agent error [" + categoryOf(e) + "]: " + e.getMessage());
+                    System.err.println("Agent error [INFRASTRUCTURE]: " + e.getMessage());
                 }
             }
         }
     }
 
-    private static AgentExecutionException.Category categoryOf(Exception e) {
-        if (e instanceof AgentExecutionException a) return a.category();
-        return AgentExecutionException.Category.INFRASTRUCTURE;
+    private static void printPlanResult(ExecutionResult result, TestOrchestrator orchestrator) {
+        System.out.println("Environment: " + (orchestrator.profile() == null ? "default" : orchestrator.profile().name));
+        System.out.println("Result: " + (result.passed() ? "PASSED" : "FAILED"));
+        System.out.println("Reports written to ./reports");
+    }
+
+    private static void printSuiteResult(SuiteExecutionResult result, TestOrchestrator orchestrator) {
+        int threads = Math.min(orchestrator.config().parallelism(), Math.max(1, result.totalTests));
+        System.out.println("Suite: " + result.suiteName);
+        System.out.println("Environment: " + (orchestrator.profile() == null ? "default" : orchestrator.profile().name));
+        System.out.println("Execution mode: parallel | threads=" + threads);
+        System.out.println("Tests: " + result.totalTests + " | Passed: " + result.passedTests + " | Failed: " + result.failedTests);
+        System.out.println("Duration: " + result.durationMs + " ms");
+        System.out.println("Suite reports: " + orchestrator.config().reportsDir() + "/suite");
+    }
+
+    private static String option(String[] args, String name) {
+        for (int i = 0; i < args.length - 1; i++) {
+            if (name.equalsIgnoreCase(args[i])) {
+                String value = args[i + 1];
+                return value.startsWith("--") ? null : value;
+            }
+        }
+        return null;
+    }
+
+    private static void printUsage() {
+        System.out.println("=== AI Testing Agent v" + VERSION + " ===");
+        System.out.println("Commands:");
+        System.out.println("  plan <file> [--env <name>]");
+        System.out.println("  suite <file> [--env <name>]");
+        System.out.println("  interactive [--env <name>]");
     }
 }
