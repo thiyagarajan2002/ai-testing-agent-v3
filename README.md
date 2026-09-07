@@ -1,54 +1,120 @@
-# AI Testing Agent — v3.6.0
+# AI Testing Agent — v3.7.0
 
 AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, and Playwright.
 
-## v3.6.0 — Test suite & parallel execution engine
+## v3.7.0 — CI/CD & GitHub Actions
 
-Version 3.6 adds a production-style suite runner for executing multiple API/UI test-plan files with configurable parallelism, isolated runtime state, individual reports, and aggregated suite reporting.
+Version 3.7 adds a GitHub Actions CI pipeline that automatically builds and tests the project on pushes and pull requests to `main`, supports manual workflow dispatch, installs the Playwright Chromium browser, and publishes the generated `reports/` directory as a workflow artifact.
 
 ### New capabilities
-- Execute multiple test-plan JSON files from one `TestSuite` JSON file.
-- Parallel execution with configurable `PARALLELISM` thread count.
-- Fresh API/UI executor state per test, preventing API variable state from leaking between parallel tests.
-- Failure isolation: one failed test does not cancel the other suite tasks.
-- Individual HTML, CSV, PDF, JSON, and log reports under `reports/suite/tests/<number>/`.
-- Aggregated suite HTML dashboard, CSV, JSON, and real PDF reports.
-- Suite-level pass/fail statistics and total duration.
-- CI-friendly exit code: suite command exits with code `1` when any test fails.
-- Suite plan path validation prevents a plan from escaping the suite directory.
-- Existing single-plan execution and v3.5 dashboard/PDF reporting remain supported.
+- GitHub Actions workflow at `.github/workflows/ci.yml`.
+- Runs automatically on pushes to `main`.
+- Runs automatically on pull requests targeting `main`.
+- Supports manual execution through `workflow_dispatch`.
+- Uses Java 21 Temurin.
+- Enables Maven dependency caching.
+- Installs Playwright Chromium in the runner.
+- Runs `mvn -B clean verify`.
+- Configures CI for headless execution and `PARALLELISM=4`.
+- Uploads `reports/` after success or failure for troubleshooting.
+- Uses a 15-minute job timeout.
+- Uses read-only repository contents permission.
 
-### Suite input
+### GitHub Actions flow
 
-Example `examples/v3-suite.json`:
-
-```json
-{
-  "name": "Smoke Suite",
-  "plans": [
-    "../examples/v3-plan-file.json"
-  ]
-}
+```text
+Push / Pull Request / Manual Run
+              |
+              v
+       Checkout repository
+              |
+              v
+       Setup Java 21
+              |
+              v
+        Maven dependency cache
+              |
+              v
+     Install Playwright Chromium
+              |
+              v
+       mvn clean verify
+              |
+          +---+---+
+          |       |
+        PASS     FAIL
+          |       |
+          +---+---+
+              |
+              v
+       Upload reports artifact
 ```
 
-Each entry in `plans` points to a test-plan JSON file. Paths are resolved relative to the suite file directory.
+### Workflow file
 
-### Run a single plan
+```text
+.github/
+└── workflows/
+    └── ci.yml
+```
+
+### CI commands
+
+The workflow executes the equivalent of:
 
 ```bash
-mvn clean test
+mvn -B clean verify
+```
+
+with:
+
+```text
+HEADLESS=true
+PARALLELISM=4
+```
+
+Playwright Chromium is installed before the Maven verification step.
+
+### Reports in GitHub Actions
+
+The workflow attempts to upload:
+
+```text
+reports/
+```
+
+as the artifact:
+
+```text
+ai-testing-agent-reports
+```
+
+The artifact is retained for 14 days. Uploading is configured with `if: always()`, so reports can still be collected when tests fail, provided files were generated.
+
+### Local execution
+
+Run tests locally:
+
+```bash
+mvn clean verify
+```
+
+Run a single plan:
+
+```bash
 mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=plan examples/v3-plan-file.json"
 ```
 
-### Run a suite
+Run a suite:
 
 ```bash
 mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=suite examples/v3-suite.json"
 ```
 
-PowerShell alternative:
+PowerShell:
 
 ```powershell
+mvn clean verify
 mvn exec:java '-Dexec.mainClass=com.thiyagarajan.agent.Main' '-Dexec.args=suite examples/v3-suite.json'
 ```
 
@@ -58,13 +124,6 @@ Default:
 
 ```text
 PARALLELISM=4
-```
-
-Linux/macOS:
-
-```bash
-export PARALLELISM=2
-mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=suite examples/v3-suite.json"
 ```
 
 PowerShell:
@@ -81,10 +140,10 @@ The actual worker count is `min(PARALLELISM, number of tests)`. A value below `1
 ```text
 reports/
 └── suite/
-    ├── suite-report.html       # Aggregated browser dashboard
-    ├── suite-report.csv        # Aggregated tabular result
-    ├── suite-report.pdf        # Real aggregated PDF
-    ├── suite-execution.json    # Full machine-readable suite result
+    ├── suite-report.html
+    ├── suite-report.csv
+    ├── suite-report.pdf
+    ├── suite-execution.json
     └── tests/
         ├── 1/
         │   ├── report.html
@@ -94,33 +153,6 @@ reports/
         │   └── execution.log
         └── 2/
             └── ...
-```
-
-### Suite execution flow
-
-```text
-TestSuite JSON
-     |
-     v
-Validate plan paths
-     |
-     v
-Create fixed thread pool
-     |
-     +---- Test 1 ----> Fresh API/UI executor ----> ExecutionResult
-     |
-     +---- Test 2 ----> Fresh API/UI executor ----> ExecutionResult
-     |
-     +---- Test N ----> Fresh API/UI executor ----> ExecutionResult
-     |
-     v
-Aggregate results
-     |
-     +--> suite-execution.json
-     +--> suite-report.csv
-     +--> suite-report.html
-     +--> suite-report.pdf
-     +--> individual reports
 ```
 
 ### Configuration
@@ -148,6 +180,7 @@ UI: `navigate`, `click`, `fill`, `press`, `selectOption`, `assertVisible`, `asse
 - v3.4.0 — Failure artifacts & screenshot management
 - v3.5.0 — Real PDF reporting & execution dashboard
 - v3.6.0 — Test suite & parallel execution engine
+- v3.7.0 — CI/CD & GitHub Actions integration
 
 ### Safety
 
