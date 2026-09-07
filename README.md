@@ -6,10 +6,6 @@ AI-assisted API and UI test planning and execution using Java 21, Ollama, REST A
 
 Version 3.12 extends v3.11 execution history with historical analytics, flaky-test detection, and a dedicated analytics dashboard.
 
-### PDF compatibility fix
-
-The project uses iText `9.3.0`. The available iText API does not provide `setBold()` on `Paragraph` or `Text` in this dependency setup. PDF headings therefore use the supported `Paragraph` API without the unsupported method. This fixes the GitHub Actions Maven compiler failure.
-
 ### New capabilities
 - Historical suite execution analytics across the latest 20 runs by default.
 - Flaky-test detection based on pass/fail status transitions.
@@ -28,6 +24,31 @@ flakinessRate = statusChanges / (N - 1)
 ```
 
 A test is considered flaky when it has at least two executions, both PASS and FAIL results, and its rate is at or above the configured threshold.
+
+### PDF compatibility fix
+
+The project uses iText `9.3.0`. The available API in this dependency setup does not provide `setBold()` on `Paragraph` or `Text`; PDF headings therefore use supported APIs only.
+
+## CI/CD — every push validates every example
+
+The GitHub Actions workflow runs on every push to `main`, pull requests to `main`, and manual dispatch. It installs Java 21 and Playwright Chromium, runs the complete Maven build/test gate, then executes `scripts/ci/run-examples.sh`.
+
+The example runner:
+
+1. Validates `examples/api-requirement.txt`.
+2. Validates `examples/ui-requirement.txt`.
+3. Parses every JSON example under `examples/`.
+4. Executes `examples/v3-plan-file.json`.
+5. Executes `examples/v3-suite.json`.
+6. Extracts and executes the API section from `examples/v2-execution.json`.
+7. Extracts and executes the UI section from `examples/v2-execution.json`.
+8. Uploads reports, screenshots, Surefire results, and generated example files as CI artifacts.
+
+The requirement `.txt` files are AI input fixtures, so CI validates their content rather than invoking Ollama. This keeps the CI build deterministic while still continuously checking every example input.
+
+## Complete documentation
+
+`PROJECT_DETAILS.md` is the canonical detailed project guide. It documents architecture, package responsibilities, important methods, configuration, test-plan schema, assertions, retries, UI/API execution, reports, failure artifacts, security redaction, suite/history/analytics behavior, all examples, CI behavior, troubleshooting, development commands, and the rule to update documentation with every future version change.
 
 ## v3.11.0 — Test Execution History & Run Comparison
 
@@ -56,7 +77,7 @@ Profiles can provide base URLs, headers, variables, timeouts, and JSON test data
 
 ## v3.7.0 — CI/CD & GitHub Actions
 
-`.github/workflows/ci.yml` uses Java 21 and runs `mvn -B --no-transfer-progress clean verify`. Reports are uploaded when available. Browser installation is kept out of the unit-build gate; install Chromium before executing UI plans.
+Java 21, Maven verification, report artifacts, and Playwright support were introduced. The current workflow additionally executes all examples after the unit-test gate.
 
 ## v3.6.0 — Test Suite & Parallel Execution
 
@@ -101,10 +122,28 @@ History / Comparison / Analytics dashboards
 mvn -B clean verify
 ```
 
+Run all examples locally:
+
+```bash
+bash scripts/ci/run-examples.sh
+```
+
 For UI execution, install Chromium first:
 
 ```bash
 mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
+```
+
+Run a plan:
+
+```bash
+mvn exec:java -Dexec.args="plan examples/v3-plan-file.json"
+```
+
+Run a suite:
+
+```bash
+mvn exec:java -Dexec.args="suite examples/v3-suite.json"
 ```
 
 ## Version history
