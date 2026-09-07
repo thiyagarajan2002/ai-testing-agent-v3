@@ -32,7 +32,7 @@ public class ApiExecutor {
 
         for (int index = 0; index < plan.steps.size(); index++) {
             TestStep step = plan.steps.get(index);
-            int retries = step.retryCount == null ? 0 : step.retryCount;
+            int retries = step.retryCount == null ? config.retries() : step.retryCount;
             if (retries < 0) throw new IllegalArgumentException("retryCount cannot be negative");
             int maxAttempts = retries + 1;
             long stepStart = System.currentTimeMillis();
