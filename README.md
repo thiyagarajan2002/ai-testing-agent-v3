@@ -1,41 +1,34 @@
-# AI Testing Agent — v3.4.0
+# AI Testing Agent — v3.5.0
 
 AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, and Playwright.
 
-## v3.4.0 — Failure artifacts & screenshot management
+## v3.5.0 — Real PDF reporting & execution dashboard
 
-Version 3.4 extends the v3.3 execution reporting layer with persistent failure artifacts. Failed API and UI steps now leave evidence on disk, and report pages expose those artifacts.
+Version 3.5 upgrades the reporting layer with a real PDF document and a richer browser dashboard while retaining the v3.4 failure-artifact model.
 
 ### New capabilities
-- `FailureArtifactManager` centralizes failure-artifact creation.
-- UI failures automatically capture a screenshot when a browser page is available.
-- UI failures also create JSON failure metadata.
-- API failures create a readable `*-api.txt` artifact containing action, URL, request body, validation details, and abbreviated response information.
-- Failure artifact names are filesystem-safe and include test/step context.
-- `ExecutionResult.StepResult` now exposes an `artifacts` list while retaining the original constructor for compatibility.
-- HTML reports link directly to step artifacts.
-- CSV reports include an `artifacts` column.
-- Existing `execution.json` and `execution.log` automatically preserve the new artifact paths through Jackson serialization.
-- API response-variable extraction is now atomic: variables are committed only after all requested JSON paths are successfully extracted.
+- `PdfReportWriter` generates a real PDF using iText.
+- `report.pdf` is now a valid PDF artifact rather than a text file with a `.pdf` extension.
+- HTML reporting is upgraded to an execution dashboard with step, pass, fail, and total-duration summary cards.
+- Dashboard continues to expose failure analysis and direct links to JSON, log, CSV, and PDF artifacts.
+- Step-level failure screenshots and API evidence remain linked from the dashboard.
+- CSV reporting retains artifact paths for CI/spreadsheet processing.
 
-### Artifact layout
-
-With the default configuration:
+### Report artifacts
 
 ```text
 reports/
-├── report.html
-├── report.csv
-├── report.pdf
-├── execution.json
-├── execution.log
-└── screenshots/
-    ├── My_Test-step-1-failure.png
-    ├── My_Test-step-1-20260907-093000-000+0530.json
-    └── My_Test-step-2-20260907-093001-000+0530-api.txt
+├── report.html       # Execution dashboard
+├── report.csv        # Tabular report
+├── report.pdf        # Real PDF report
+├── execution.json    # Machine-readable execution result
+├── execution.log     # Human-readable execution log
+└── screenshots/      # Failure screenshots/evidence
 ```
 
-The timestamped metadata/API artifacts prevent collisions between repeated executions. The UI failure screenshot uses the stable test/step name so the latest failure evidence is easy to find; a later execution can replace that same screenshot.
+### PDF contents
+
+The generated PDF contains the test name, overall status, step totals, failure analysis, and a step-result table containing action, status, duration, and details.
 
 ### Configuration
 
@@ -55,7 +48,7 @@ mvn clean test
 mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=plan examples/v3-plan-file.json"
 ```
 
-For a custom report directory:
+Custom report location:
 
 ```bash
 # Linux/macOS
@@ -73,20 +66,13 @@ API: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
 
 UI: `navigate`, `click`, `fill`, `press`, `selectOption`, `assertVisible`, `assertText`, `assertValue`, `waitFor`, `screenshot`.
 
-### Failure handling
+### Version history
 
-A failed UI step attempts two artifacts: a screenshot and JSON metadata. If screenshot capture is unavailable, metadata is still retained. A failed API step creates a text evidence artifact. Artifact-generation failures do not hide the original test failure.
+- v3.2.0 — Retry & resilience engine
+- v3.3.0 — Advanced execution reporting and logs
+- v3.4.0 — Failure artifacts & screenshot management
+- v3.5.0 — Real PDF reporting & execution dashboard
 
-Request/response evidence should be treated as test data. Do not place secrets directly in request bodies or plans when artifacts are persisted to shared CI storage.
-
-### Compatibility
-
-The existing four-argument `StepResult` constructor remains available. `retryCount` behavior from v3.2 is unchanged: an omitted value means zero retries, while `retryCount: 2` permits three total attempts.
-
-### Versioning
-
-This commit represents milestone `v3.4.0` — Failure artifacts & screenshot management.
-
-## Safety
+### Safety
 
 The LLM remains restricted to the fixed JSON test-plan schema. Runtime execution remains limited to explicitly supported API and UI actions; arbitrary shell, Java, JavaScript, or SQL execution is not introduced.
