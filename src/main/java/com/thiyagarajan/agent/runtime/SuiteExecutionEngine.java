@@ -145,18 +145,19 @@ public final class SuiteExecutionEngine {
     }
 
     /**
-     * Resolves a plan relative to the suite directory. Paths may legitimately use
-     * ../ to reference sibling directories such as ../plans, but may not escape the
-     * execution workspace. This preserves repository organization while retaining
-     * path-traversal protection.
+     * Resolves a plan relative to the suite directory.
+     * The parent of the suite directory is the suite workspace, so sibling
+     * directories such as ../plans are valid while paths escaping that workspace
+     * remain blocked. This works for both the repository examples/suites layout
+     * and isolated temporary test workspaces.
      */
     private Path resolvePlan(Path dir, String file) {
         Path root = dir.toAbsolutePath().normalize();
         Path resolved = root.resolve(file).normalize();
-        Path workspace = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
+        Path workspace = root.getParent() == null ? root : root.getParent();
         if (!resolved.startsWith(workspace)) {
             throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION,
-                    "Plan path escapes repository root: " + file);
+                    "Plan path escapes suite workspace: " + file);
         }
         if (!Files.isRegularFile(resolved)) {
             throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION,
