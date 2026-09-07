@@ -12,8 +12,7 @@ import java.util.Scanner;
 
 /** Thin CLI entry point. Execution lifecycle is delegated to TestOrchestrator. */
 public final class Main {
-    private static final String VERSION = "3.14.0";
-
+    private static final String VERSION = "3.15.0";
     private Main() { }
 
     public static void main(String[] args) {
@@ -22,8 +21,7 @@ public final class Main {
             if (exitCode != 0) System.exit(exitCode);
         } catch (AgentExecutionException e) {
             System.err.println("Agent error [" + e.category() + "]: " + e.getMessage());
-            if (e.getCause() != null && e.getCause().getMessage() != null)
-                System.err.println("Cause: " + e.getCause().getMessage());
+            if (e.getCause() != null && e.getCause().getMessage() != null) System.err.println("Cause: " + e.getCause().getMessage());
             System.exit(2);
         } catch (Exception e) {
             System.err.println("Agent error [INFRASTRUCTURE]: " + e.getMessage());
@@ -43,7 +41,6 @@ public final class Main {
                 return result.passed() ? 0 : 1;
             }
         }
-
         if (args.length >= 2 && "suite".equalsIgnoreCase(args[0])) {
             try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, environment)) {
                 SuiteExecutionResult result = orchestrator.executeSuite(args[1]);
@@ -51,19 +48,44 @@ public final class Main {
                 return result.passed() ? 0 : 1;
             }
         }
-
+        if (args.length >= 2 && "validate".equalsIgnoreCase(args[0])) {
+            try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, environment)) {
+                if ("plan".equalsIgnoreCase(args[1]) && args.length >= 3) return validatePlan(orchestrator, args[2]);
+                if ("suite".equalsIgnoreCase(args[1]) && args.length >= 3) return validateSuite(orchestrator, args[2]);
+                System.err.println("Usage: validate <plan|suite> <file> [--env <name>]");
+                return 2;
+            }
+        }
         if (args.length > 0 && "interactive".equalsIgnoreCase(args[0])) {
             interactive(config, mapper, environment);
             return 0;
         }
-
         printUsage();
         return args.length == 0 ? 0 : 2;
     }
 
+    private static int validatePlan(TestOrchestrator orchestrator, String file) throws Exception {
+        var result = orchestrator.validatePlan(file);
+        System.out.println("Plan preflight: " + (result.valid() ? "VALID" : "INVALID"));
+        result.warnings().forEach(w -> System.out.println("WARNING: " + w));
+        result.errors().forEach(e -> System.out.println("ERROR: " + e));
+        return result.valid() ? 0 : 1;
+    }
+
+    private static int validateSuite(TestOrchestrator orchestrator, String file) throws Exception {
+        var result = orchestrator.validateSuite(file);
+        System.out.println("Suite: " + result.suiteName);
+        for (var plan : result.plans()) {
+            System.out.println((plan.valid() ? "VALID" : "INVALID") + "  " + plan.file());
+            plan.warnings().forEach(w -> System.out.println("  WARNING: " + w));
+            plan.errors().forEach(e -> System.out.println("  ERROR: " + e));
+        }
+        System.out.println("Suite preflight: " + (result.valid() ? "VALID" : "INVALID"));
+        return result.valid() ? 0 : 1;
+    }
+
     private static void interactive(Config config, ObjectMapper mapper, String environment) throws Exception {
-        try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, environment);
-             Scanner scanner = new Scanner(System.in)) {
+        try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, environment); Scanner scanner = new Scanner(System.in)) {
             System.out.println("=== AI Testing Agent v" + VERSION + " ===");
             System.out.println("Enter a testing requirement. Type 'exit' to quit.");
             while (true) {
@@ -106,11 +128,8 @@ public final class Main {
     }
 
     private static String option(String[] args, String name) {
-        for (int i = 0; i < args.length - 1; i++) {
-            if (name.equalsIgnoreCase(args[i])) {
-                String value = args[i + 1];
-                return value.startsWith("--") ? null : value;
-            }
+        for (int i = 0; i < args.length - 1; i++) if (name.equalsIgnoreCase(args[i])) {
+            String value = args[i + 1]; return value.startsWith("--") ? null : value;
         }
         return null;
     }
@@ -120,6 +139,8 @@ public final class Main {
         System.out.println("Commands:");
         System.out.println("  plan <file> [--env <name>]");
         System.out.println("  suite <file> [--env <name>]");
+        System.out.println("  validate plan <file> [--env <name>]");
+        System.out.println("  validate suite <file> [--env <name>]");
         System.out.println("  interactive [--env <name>]");
     }
 }
