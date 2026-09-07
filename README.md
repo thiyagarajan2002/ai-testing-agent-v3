@@ -8,7 +8,7 @@ Version 3.12 extends v3.11 execution history with historical analytics, flaky-te
 
 ### PDF compatibility fix
 
-The project uses iText `9.3.0`. The iText 9 API available to this project does not expose `setBold()` on `Paragraph` or `Text`, so PDF headings now use the supported plain `Paragraph` API. This removes the GitHub Actions Maven compilation failure caused by `Paragraph.setBold()` and `Text.setBold()`.
+The project uses iText `9.3.0`. The available iText API does not provide `setBold()` on `Paragraph` or `Text` in this dependency setup. PDF headings therefore use the supported `Paragraph` API without the unsupported method. This fixes the GitHub Actions Maven compiler failure.
 
 ### New capabilities
 - Historical suite execution analytics across the latest 20 runs by default.
@@ -19,22 +19,6 @@ The project uses iText `9.3.0`. The iText 9 API available to this project does n
 - Existing regression/fixed/new/removed comparison from v3.11 remains available.
 - Sensitive values are redacted before analytics output.
 
-### History layout
-
-```text
-reports/history/
-├── index.json
-├── index.html
-├── analytics.json
-├── analytics.csv
-├── analytics.html
-└── <run-id>/
-    ├── suite-execution.json
-    ├── comparison.json
-    ├── comparison.csv
-    └── comparison.html
-```
-
 ### Flaky detection
 
 For a test with `N` executions:
@@ -43,7 +27,7 @@ For a test with `N` executions:
 flakinessRate = statusChanges / (N - 1)
 ```
 
-A test is considered flaky when it has at least two executions, both PASS and FAIL results, and its rate is at or above the configured threshold. An alternating sequence such as `PASS → FAIL → PASS → FAIL` has a 100% transition rate.
+A test is considered flaky when it has at least two executions, both PASS and FAIL results, and its rate is at or above the configured threshold.
 
 ## v3.11.0 — Test Execution History & Run Comparison
 
@@ -82,66 +66,20 @@ Multiple JSON plans execute in parallel with configurable workers. Each test get
 
 Executions produce HTML, CSV, PDF, JSON, and execution logs.
 
-## v3.4.0 — Failure Artifacts
-
-UI failures can create screenshots/metadata and API failures capture request/response diagnostics. v3.10 redaction protects sensitive evidence.
-
-## v3.3.0 — Advanced Reporting
-
-Execution results contain per-step status, duration, diagnostic details, failure analysis, and artifact references.
-
-## v3.2.0 — Retry & Resilience
-
-API steps support `retryCount`; omitted values use global `RETRIES`.
-
 ## Architecture
 
 ```text
-Requirement
-    ↓
-PromptManager → OllamaClient
-    ↓
-TestPlan JSON
-    ↓
-EnvironmentManager
-    ↓
-AgentRunner
-    ├── ApiExecutor → ApiAssertionEngine → REST Assured
-    └── UiExecutor → Playwright
-    ↓
+Requirement → PromptManager → OllamaClient → TestPlan
+                                      ↓
+EnvironmentManager → AgentRunner → API/UI Executors
+                                      ↓
 ExecutionResult / SuiteExecutionResult
-    ↓
-SecurityRedactor
-    ↓
-ReportManager / SuiteReportManager
-    ↓
+                                      ↓
+SecurityRedactor → Reports
+                                      ↓
 RunHistoryManager → HistoryAnalyticsManager
-    ↓
-History + comparison + analytics dashboards
-```
-
-## Project structure
-
-```text
-src/main/java/com/thiyagarajan/agent/
-├── ai/
-├── config/
-├── model/
-├── report/
-│   ├── PdfReportWriter.java
-│   ├── ReportManager.java
-│   └── SuiteReportManager.java
-└── runtime/
-    ├── ApiAssertionEngine.java
-    ├── ApiExecutor.java
-    ├── ExecutionResult.java
-    ├── FailureArtifactManager.java
-    ├── HistoryAnalyticsManager.java
-    ├── RunComparisonResult.java
-    ├── RunHistoryManager.java
-    ├── SecurityRedactor.java
-    ├── SuiteExecutionEngine.java
-    └── UiExecutor.java
+                                      ↓
+History / Comparison / Analytics dashboards
 ```
 
 ## Configuration
@@ -157,11 +95,10 @@ src/main/java/com/thiyagarajan/agent/
 | `REPORTS_DIR` | `reports` | Report/history root |
 | `SCREENSHOTS_DIR` | `screenshots` | Failure-artifact directory |
 
-## Commands
+## Build and test
 
 ```bash
 mvn -B clean verify
-mvn exec:java "-Dexec.mainClass=com.thiyagarajan.agent.Main" "-Dexec.args=suite examples/v3-suite.json"
 ```
 
 For UI execution, install Chromium first:
@@ -169,15 +106,6 @@ For UI execution, install Chromium first:
 ```bash
 mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
 ```
-
-## Security checklist
-
-1. Keep secrets in CI/environment variables.
-2. Prefer `${env.NAME}` placeholders.
-3. Do not disable redaction for reports.
-4. Treat failure artifacts as potentially sensitive.
-5. Review custom test-data and assertion values before sharing reports.
-6. LLM output remains constrained to the supported test-plan schema.
 
 ## Version history
 
@@ -191,4 +119,4 @@ mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install
 - v3.9.0 — Advanced assertions
 - v3.10.0 — Sensitive-data redaction
 - v3.11.0 — Execution history and run comparison
-- v3.12.0 — Historical analytics, flaky-test detection, and iText 9 PDF compatibility fix
+- v3.12.0 — Historical analytics, flaky-test detection, and iText PDF compatibility
