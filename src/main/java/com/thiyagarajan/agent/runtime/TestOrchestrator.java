@@ -28,11 +28,12 @@ public final class TestOrchestrator implements AutoCloseable {
         try{this.reports=new ReportManager();}catch(Exception e){throw new AgentExecutionException(AgentExecutionException.Category.REPORTING,"Report manager initialization failed: "+e.getMessage(),e);}
     }
     public ExecutionResult executePlan(String file)throws Exception{Path p=requireFile(file,AgentExecutionException.Category.PLAN_VALIDATION,"Plan");TestPlan plan=readPlan(p);if(profile!=null)environments.apply(plan,profile);ExecutionResult r=runner.execute(plan);analyzeIfFailed(plan,r);reports.writeAll(r);return r;}
-    public DataDrivenExecutionResult executeDataDriven(String planFile,String dataFile)throws Exception{return executeDataDriven(planFile,dataFile,Map.of());}
-    public DataDrivenExecutionResult executeDataDriven(String planFile,String dataFile,Map<String,String> filters)throws Exception{
+    public DataDrivenExecutionResult executeDataDriven(String planFile,String dataFile)throws Exception{return executeDataDriven(planFile,dataFile,Map.of(),config.parallelism());}
+    public DataDrivenExecutionResult executeDataDriven(String planFile,String dataFile,Map<String,String> filters)throws Exception{return executeDataDriven(planFile,dataFile,filters,config.parallelism());}
+    public DataDrivenExecutionResult executeDataDriven(String planFile,String dataFile,Map<String,String> filters,int parallelism)throws Exception{
         Path pp=requireFile(planFile,AgentExecutionException.Category.PLAN_VALIDATION,"Plan"), dp=requireFile(dataFile,AgentExecutionException.Category.PLAN_VALIDATION,"Data");
         TestPlan plan=readPlan(pp);if(profile!=null)environments.apply(plan,profile);
-        DataDrivenExecutionResult result=new DataDrivenRunner(mapper,runner).execute(plan,dp,filters);
+        DataDrivenExecutionResult result=new DataDrivenRunner(mapper,runner).execute(plan,dp,filters,parallelism);
         for(var i:result.iterations)if(i.execution!=null&&!i.execution.passed())analyzeIfFailed(planForIteration(plan,i.data),i.execution);
         Path dir=Path.of(config.reportsDir(),"data-driven",safeName(result.testName)).toAbsolutePath().normalize();new DataDrivenReportManager(mapper,dir).writeAll(result);return result;
     }
