@@ -11,11 +11,12 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-/** Creates durable execution logs while preserving terminal output. */
+/** Creates durable terminal logs while preserving live terminal output. */
 public final class RunLogManager implements AutoCloseable {
     private final Path logFile;
     private final PrintStream originalOut;
     private final PrintStream originalErr;
+    private final PrintStream filePrint;
     private final PrintStream teeOut;
     private final PrintStream teeErr;
 
@@ -24,8 +25,9 @@ public final class RunLogManager implements AutoCloseable {
         this.originalOut = originalOut;
         this.originalErr = originalErr;
         Files.createDirectories(logFile.getParent());
-        OutputStream fileOut = Files.newOutputStream(logFile, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        PrintStream filePrint = new PrintStream(fileOut, true, StandardCharsets.UTF_8);
+        this.filePrint = new PrintStream(
+                Files.newOutputStream(logFile, StandardOpenOption.CREATE, StandardOpenOption.APPEND),
+                true, StandardCharsets.UTF_8);
         this.teeOut = new TeePrintStream(originalOut, filePrint);
         this.teeErr = new TeePrintStream(originalErr, filePrint);
         System.setOut(teeOut);
@@ -38,8 +40,8 @@ public final class RunLogManager implements AutoCloseable {
         String safeCommand = safe(command, "run");
         String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS", Locale.ROOT)
                 .withZone(java.time.ZoneId.systemDefault()).format(Instant.now());
-        Path file = Path.of(reportsDir, safeArea, "logs", "terminal-" + timestamp + "-" + safeCommand + ".log")
-                .toAbsolutePath().normalize();
+        Path file = Path.of(reportsDir, safeArea, "logs",
+                "terminal-" + timestamp + "-" + safeCommand + ".log").toAbsolutePath().normalize();
         return new RunLogManager(file, System.out, System.err);
     }
 
@@ -53,10 +55,11 @@ public final class RunLogManager implements AutoCloseable {
     @Override
     public void close() {
         log("=== AI Testing Agent run finished ===");
-        System.setOut(originalOut);
-        System.setErr(originalErr);
         teeOut.flush();
         teeErr.flush();
+        System.setOut(originalOut);
+        System.setErr(originalErr);
+        filePrint.close();
     }
 
     private static String safe(String value, String fallback) {
@@ -66,17 +69,12 @@ public final class RunLogManager implements AutoCloseable {
     }
 
     private static final class TeePrintStream extends PrintStream {
-        private final PrintStream console;
-        private final PrintStream file;
-
         TeePrintStream(PrintStream console, PrintStream file) throws IOException {
             super(new OutputStream() {
                 @Override public void write(int b) { console.write(b); file.write(b); }
                 @Override public void write(byte[] b, int off, int len) { console.write(b, off, len); file.write(b, off, len); }
                 @Override public void flush() { console.flush(); file.flush(); }
             }, true, StandardCharsets.UTF_8);
-            this.console = console;
-            this.file = file;
         }
 
         @Override public void close() { flush(); }
