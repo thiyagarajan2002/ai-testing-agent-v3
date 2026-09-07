@@ -99,17 +99,7 @@ public class AgentRunner {
     }
 
     private void validate(TestPlan plan) {
-        if (plan == null) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Test plan cannot be null");
-        if (plan.steps == null || plan.steps.isEmpty()) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Test plan contains no steps");
-        if (!"API".equalsIgnoreCase(plan.type) && !"UI".equalsIgnoreCase(plan.type)) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Unsupported plan type: " + plan.type);
-        if (plan.baseUrl == null || plan.baseUrl.isBlank()) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "baseUrl is required");
-        for (var step : plan.steps) {
-            if (step == null || step.action == null || step.action.isBlank()) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Every step requires an action");
-            if (step.retryCount != null && step.retryCount < 0) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "retryCount cannot be negative");
-            String action = step.action.trim();
-            if ("API".equalsIgnoreCase(plan.type) && !action.matches("(?i)GET|POST|PUT|PATCH|DELETE")) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Invalid API action: " + action);
-            if ("UI".equalsIgnoreCase(plan.type) && !action.matches("(?i)navigate|click|fill|press|selectOption|assertVisible|assertText|assertValue|waitFor|screenshot")) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Invalid UI action: " + action);
-        }
+        TestPlanValidator.requireValid(plan);
     }
 
     private String cleanJson(String raw) {
