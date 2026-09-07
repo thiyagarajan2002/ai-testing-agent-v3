@@ -2,9 +2,9 @@
 
 ## 1. Project overview
 
-AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama-based planning with REST Assured API execution, Playwright UI execution, JSON test plans, environment profiles, retries, assertions, failure artifacts, reports, suite execution, execution history, regression comparison, analytics, and sensitive-data redaction.
+AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama-based planning with REST Assured API execution, Playwright UI execution, JSON test plans, environment profiles, retries, assertions, failure artifacts, reports, suite execution, execution history, regression comparison, analytics, sensitive-data redaction, and CI automation.
 
-Current version: **3.12.0**.
+Current version: **3.13.0**.
 
 ## 2. Technology stack
 
@@ -46,15 +46,13 @@ ai-testing-agent-v3/
 └── pom.xml
 ```
 
-## 4. Main execution commands
-
-Build and test:
+## 4. Main commands
 
 ```bash
 mvn clean verify
 ```
 
-Install Playwright Chromium reliably:
+Install Chromium:
 
 ```bash
 mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
@@ -66,7 +64,7 @@ Run a plan:
 mvn exec:java -Dexec.args="plan examples/v3-plan-file.json"
 ```
 
-Run a plan with an environment profile:
+Run a plan with an environment:
 
 ```bash
 mvn exec:java -Dexec.args="plan examples/v3-plan-file.json --env qa"
@@ -78,7 +76,7 @@ Run a suite:
 mvn exec:java -Dexec.args="suite examples/v3-suite.json"
 ```
 
-Run all repository examples:
+Run all examples:
 
 ```bash
 bash scripts/ci/run-examples.sh
@@ -103,21 +101,17 @@ mvn exec:java
 | REPORTS_DIR | reports | Report/history root |
 | SCREENSHOTS_DIR | screenshots | Failure artifact root |
 
+`Config` now validates all constructor values. Invalid timeout, retry, parallelism, blank Ollama settings, or blank output directories fail with a categorized configuration error. Invalid integer environment variables also fail explicitly instead of silently falling back.
+
 ## 6. Test-plan model
 
-A `TestPlan` contains:
-
-- `name`
-- `type` (`API` or `UI`)
-- `baseUrl`
-- `variables`
-- `steps`
+A `TestPlan` contains `name`, `type` (`API` or `UI`), `baseUrl`, `variables`, and `steps`.
 
 A `TestStep` supports API method/path, headers, query parameters, request body, timeout, retry count, assertions, saved variables, and UI locator/value fields.
 
 ## 7. Placeholder resolution
 
-Environment/profile/data values can be referenced with:
+Supported placeholders include:
 
 ```text
 ${profile.baseUrl}
@@ -126,11 +120,9 @@ ${env.API_TOKEN}
 ${version}
 ```
 
-Unresolved environment/profile/data placeholders fail fast where required by the execution layer.
-
 ## 8. API execution
 
-The API executor builds requests from the plan, applies headers/query/body values, performs the request, evaluates assertions, saves configured response values, retries failures according to the configured retry policy, and creates failure artifacts when execution fails.
+The API executor builds requests from the plan, applies headers/query/body values, performs requests, evaluates assertions, saves configured response values, retries failures according to the configured retry policy, and creates failure artifacts when execution fails.
 
 ### Supported assertions
 
@@ -148,14 +140,7 @@ The API executor builds requests from the plan, applies headers/query/body value
 
 ## 9. UI execution
 
-The Playwright executor supports browser navigation and common actions/assertions such as:
-
-- navigate
-- click
-- fill
-- assertVisible
-- assertText
-- screenshot
+The Playwright executor supports browser navigation and common actions/assertions such as `navigate`, `click`, `fill`, `assertVisible`, `assertText`, and `screenshot`.
 
 Chromium is installed explicitly in CI before example execution.
 
@@ -173,15 +158,55 @@ The reporting layer produces execution information in JSON, CSV, HTML and PDF fo
 
 ## 13. Security redaction
 
-`SecurityRedactor` centralizes masking of sensitive values including passwords, secrets, tokens, API keys, client secrets, authorization headers, cookies and common sensitive environment variables. Redaction is applied before sensitive information is placed into execution results, reports, failure artifacts, history/analytics output, or AI failure-analysis prompts.
+`SecurityRedactor` centralizes masking of passwords, secrets, tokens, API keys, client secrets, authorization headers, cookies and common sensitive environment variables. Redaction is applied before sensitive information is placed into execution results, reports, failure artifacts, history/analytics output, or AI failure-analysis prompts.
 
 ## 14. Suite execution
 
-`SuiteExecutionEngine` loads multiple plan files, executes them with configurable parallelism, isolates executor state between tests, and aggregates results. A failed test does not prevent the remaining tests from running.
+`SuiteExecutionEngine` loads multiple plan files, executes them with configurable parallelism, isolates executor state between tests, and aggregates results. A failed test does not prevent remaining tests from running.
 
-`SuiteReportManager` writes aggregate suite reports and individual test reports.
+The v3.13 engine additionally:
 
-## 15. Execution history
+- converts malformed plan JSON into a `PLAN_VALIDATION` failure;
+- preserves the original suite test index when an infrastructure error occurs;
+- catches per-test execution errors without aborting unrelated tests;
+- reports a categorized failure message;
+- handles executor interruption correctly by restoring the thread interrupt flag;
+- waits for worker termination and forces shutdown if necessary;
+- validates plan paths against the suite root to prevent path traversal.
+
+## 15. Standardized execution errors — v3.13
+
+`AgentExecutionException` provides a common runtime error type with categories:
+
+```text
+CONFIGURATION
+PLAN_VALIDATION
+SUITE_VALIDATION
+API_EXECUTION
+UI_EXECUTION
+ASSERTION
+AI_GENERATION
+REPORTING
+INFRASTRUCTURE
+```
+
+This makes CLI, suite, and diagnostic failures easier to classify and troubleshoot.
+
+`AgentRunner` now uses these categories for plan validation, AI generation failures, API/UI execution failures, suite validation, and failure-analysis failures.
+
+## 16. CLI error handling — v3.13
+
+`Main.main` now separates the application entry point from `run()` and converts unexpected top-level failures into concise categorized CLI messages.
+
+Exit codes:
+
+- `0` — successful execution
+- `1` — executed test/plan/suite failed
+- `2` — configuration, validation, or infrastructure/application error
+
+Malformed plan and suite JSON are reported as validation errors instead of exposing an unstructured parser stack trace.
+
+## 17. Execution history
 
 `RunHistoryManager` stores each suite execution under:
 
@@ -189,7 +214,7 @@ The reporting layer produces execution information in JSON, CSV, HTML and PDF fo
 reports/history/<run-id>/
 ```
 
-It maintains an index and compares the current run with the previous run using the stable identity:
+Stable identity:
 
 ```text
 planFile + "::" + testName
@@ -206,7 +231,7 @@ Comparison categories:
 
 It records pass-rate and duration deltas and writes JSON, CSV and HTML comparison output.
 
-## 16. Historical analytics
+## 18. Historical analytics
 
 `HistoryAnalyticsManager` analyzes recent suite history (20 runs by default), calculates execution/pass/failure totals, detects flaky tests, and identifies the slowest tests.
 
@@ -226,11 +251,11 @@ reports/history/analytics.csv
 reports/history/analytics.html
 ```
 
-## 17. CI/CD behavior
+## 19. CI/CD behavior
 
 `.github/workflows/ci.yml` runs on every push to `main`, pull requests to `main`, and manual workflow dispatch.
 
-### CI stages
+CI stages:
 
 1. Checkout with `actions/checkout@v5`.
 2. Install Java 21 with `actions/setup-java@v5`.
@@ -240,17 +265,9 @@ reports/history/analytics.html
 6. Run `scripts/ci/run-examples.sh`.
 7. Upload reports, screenshots, Surefire output, and generated example files.
 
-### Why compilation happens before browser installation
+The compile-before-browser-install sequence fixes the previous clean-runner `ClassNotFoundException: com.thiyagarajan.agent.Main` problem. Artifact upload uses `if: always()` and `if-no-files-found: ignore` so artifact collection does not hide the original failure.
 
-The previous workflow invoked Maven `exec:java` before project compilation. On a clean GitHub runner, `target/classes` did not yet contain `com.thiyagarajan.agent.Main`, producing:
-
-```text
-ClassNotFoundException: com.thiyagarajan.agent.Main
-```
-
-The project now defines a dedicated `playwright-cli` execution in `exec-maven-plugin`, and CI explicitly compiles before invoking it. This makes the browser-install step deterministic and prevents the old classpath failure.
-
-### Every example is continuously verified
+## 20. Every example is continuously verified
 
 `run-examples.sh`:
 
@@ -261,19 +278,17 @@ The project now defines a dedicated `playwright-cli` execution in `exec-maven-pl
 - extracts and executes the API portion of `v2-execution.json`;
 - extracts and executes the UI portion of `v2-execution.json`.
 
-Therefore a push is not CI-green unless the Maven test gate and all executable examples pass.
+Requirement `.txt` files are AI inputs, not executable plans, so CI validates their content instead of requiring Ollama. This keeps CI deterministic while validating all example inputs.
 
-Requirement `.txt` files are inputs for AI plan generation, not executable plans, so CI validates their content instead of requiring Ollama. This keeps CI deterministic while still continuously validating all example inputs.
-
-## 18. Example files
+## 21. Example files
 
 ### `examples/api-requirement.txt`
 
-API requirement input used for AI plan generation and checked for non-empty content in CI.
+API requirement input for AI plan generation and CI content validation.
 
 ### `examples/ui-requirement.txt`
 
-UI requirement input used for AI plan generation and checked for non-empty content in CI.
+UI requirement input for AI plan generation and CI content validation.
 
 ### `examples/v2-execution.json`
 
@@ -285,11 +300,11 @@ Current direct API plan demonstrating variables, headers, query parameters, retr
 
 ### `examples/v3-suite.json`
 
-Current suite definition referencing the v3 plan and exercising suite orchestration, reporting, history, comparison and analytics.
+Current suite definition exercising suite orchestration, reporting, history, comparison and analytics.
 
-## 19. Generated output
+## 22. Generated output
 
-Typical output directories:
+Typical output:
 
 ```text
 reports/
@@ -316,43 +331,50 @@ target/
 └── ci-examples/
 ```
 
-Exact report filenames can vary by report manager/version.
-
-## 20. Failure-analysis flow
+## 23. Failure-analysis flow
 
 When a test fails, the agent can pass the redacted plan and execution result to Ollama for AI-assisted failure analysis. AI analysis failure is isolated from the underlying test result so reporting can still complete.
 
-## 21. Important implementation methods
+## 24. Important implementation methods
 
 ### `Main.main`
-Loads configuration, resolves an optional environment profile, dispatches `plan` and `suite` commands, or starts interactive mode.
+Top-level entry point. Converts categorized application failures into deterministic CLI output and exit code `2`.
+
+### `Main.run`
+Loads configuration, resolves an optional environment profile, dispatches commands, or starts interactive mode.
 
 ### `Main.executeFile`
-Loads a JSON test plan, applies an environment profile, executes it, performs optional AI failure analysis, writes reports, and exits with failure when the test fails.
+Loads and validates a JSON plan, applies the environment profile, executes it, performs optional failure analysis, writes reports, and returns exit code `1` for a failed test.
 
 ### `Main.executeSuite`
-Loads a suite, executes it using configured parallelism, writes suite reports, records history, performs analytics, prints summary paths, and exits with failure when the suite fails.
+Loads and validates a suite, executes it using configured parallelism, writes suite reports, records history, performs analytics, and returns exit code `1` for a failed suite.
 
-### `EnvironmentManager.load/apply`
-Loads an environment profile, validates paths, loads optional test data, and merges its base URL, headers, variables and timeout into a test plan.
+### `Config.load`
+Loads environment variables and validates all runtime configuration values.
 
 ### `AgentRunner.plan`
-Converts a natural-language requirement into a structured test plan using the configured Ollama client.
+Converts a natural-language requirement into a structured test plan using Ollama and categorizes invalid AI output as `AI_GENERATION`.
 
 ### `AgentRunner.execute`
-Selects API or UI execution based on the test-plan type and returns an `ExecutionResult`.
+Validates a plan, selects API or UI execution, and categorizes execution failures.
 
-### `ApiExecutor.execute`
-Runs API steps, applies retries, substitutions, assertions, saved variables and failure artifacts.
+### `AgentRunner.executeSuite`
+Backward-compatible sequential suite execution with the same validation/error model.
 
-### `ApiAssertionEngine`
-Evaluates supported API assertion types and generates diagnostic failure messages.
+### `AgentRunner.analyzeFailure`
+Redacts plan/result data and requests AI failure analysis while categorizing AI errors.
 
 ### `SuiteExecutionEngine.execute`
-Executes suite plans concurrently using the configured worker count and isolates failures per test.
+Executes suite plans concurrently using the configured worker count and isolates per-test failures.
+
+### `SuiteExecutionEngine.executeSafely`
+Converts an individual plan execution exception into a failed `TestExecution` so other suite tasks can continue.
+
+### `SuiteExecutionEngine.resolvePlan`
+Normalizes and validates a plan path and prevents it from escaping the suite directory.
 
 ### `SuiteReportManager.writeAll`
-Generates aggregate suite report formats and individual test reports.
+Generates aggregate suite reports and individual test reports.
 
 ### `RunHistoryManager.recordSuite`
 Persists a suite snapshot, compares it with the previous run, and updates the history index.
@@ -361,31 +383,48 @@ Persists a suite snapshot, compares it with the previous run, and updates the hi
 Loads recent run history, computes analytics/flakiness/slow tests, and writes dashboard data and reports.
 
 ### `SecurityRedactor.redactText`
-Removes or masks recognized sensitive values before output persistence or AI analysis.
+Masks recognized sensitive values before output persistence or AI analysis.
 
-## 22. Development workflow
+## 25. Tests added in v3.13
 
-For source/configuration changes:
+`ConfigValidationTest` verifies:
+
+- invalid timeout rejection;
+- negative retry rejection;
+- blank model rejection.
+
+`AgentRunnerValidationTest` verifies:
+
+- null plan rejection;
+- unsupported plan type rejection;
+- invalid API action rejection;
+- correct `PLAN_VALIDATION` categorization.
+
+Existing suite/history/analytics/reporting tests remain part of the Maven test gate.
+
+## 26. Development workflow
+
+Source/configuration changes:
 
 ```bash
 mvn clean verify
 ```
 
-For example changes:
+Example changes:
 
 ```bash
 bash scripts/ci/run-examples.sh
 ```
 
-For UI changes:
+UI/browser changes:
 
 ```bash
 mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
 ```
 
-Commit and push to `main`. GitHub Actions automatically repeats the compile, browser setup, full Maven test gate, and all example executions.
+Push to `main` and GitHub Actions repeats compilation, browser setup, Maven verification, and all example executions.
 
-## 23. Current bug fixes and hardening
+## 27. Current bug fixes and hardening
 
 ### Fixed: Playwright CLI `ClassNotFoundException`
 
@@ -397,35 +436,51 @@ Fix:
 - explicit compile step before CLI execution;
 - CI invokes `exec:java@playwright-cli`.
 
-### Fixed: obsolete GitHub Actions Node 20 warnings
+### Fixed: CI action runtime warnings
 
-The workflow was migrated from checkout/setup-java/upload-artifact v4 to the v5 action releases so the workflow uses the current Node 24-compatible action runtime.
+The workflow uses the v5 releases of checkout, setup-java, and upload-artifact.
 
 ### Fixed: PDF `setBold()` incompatibility
 
-Removed unsupported `setBold()` calls from iText PDF writer code and pinned iText 9.3.0.
+Unsupported `setBold()` calls were removed from the iText PDF writer and iText 9.3.0 is pinned.
 
 ### Fixed: `Config` constructor mismatch
 
-Tests using the old six-argument constructor were updated for the current eight-field configuration record (`ollamaUrl`, `ollamaModel`, `headless`, `defaultTimeoutMs`, `retries`, `parallelism`, `reportsDir`, `screenshotsDir`).
+Tests were updated for the current eight-field configuration record.
+
+### Fixed: weak configuration validation — v3.13
+
+Configuration is now validated at construction time. Invalid numeric environment variables produce an explicit categorized error instead of being silently replaced with a default.
+
+### Fixed: unstructured execution errors — v3.13
+
+The new `AgentExecutionException` provides stable error categories across configuration, validation, execution, AI, reporting, and infrastructure failures.
+
+### Fixed: suite failure propagation — v3.13
+
+Individual plan parsing/execution failures are converted into failed test results so independent suite tests continue running. Executor interruption and shutdown are handled explicitly.
 
 ### Artifact handling
 
-Artifact upload runs with `if: always()` so failures still attempt collection. `if-no-files-found: ignore` prevents a secondary artifact-upload failure when an earlier step fails before producing output.
+Artifact upload runs with `if: always()` and ignores missing paths so an earlier failure remains the primary CI failure.
 
-## 24. CI troubleshooting
+## 28. CI troubleshooting
 
-If Maven compilation fails, fix the Java/compiler error before considering example execution.
+If Maven compilation fails, fix the Java/compiler error first.
 
 If Playwright reports a missing browser, verify the compile and dedicated `playwright-cli` installation stages completed.
+
+If a plan/suite JSON is malformed, the CLI now reports `PLAN_VALIDATION` or `SUITE_VALIDATION` instead of an unclassified parser stack trace.
+
+If `OLLAMA_URL`, `OLLAMA_MODEL`, `DEFAULT_TIMEOUT_MS`, `RETRIES`, or `PARALLELISM` is invalid, correct the environment variable; v3.13 no longer silently accepts malformed integer configuration.
 
 If an external API/UI example fails because its public service is unavailable, CI correctly reports the example failure; investigate service availability before changing application code.
 
 If a test fails because of a constructor/API change, search the repository for all usages of the changed constructor or method before updating individual tests.
 
-The GitHub Actions Node/punycode messages are action-runtime deprecation warnings and are separate from Java build failures.
+Node/punycode messages from third-party action internals are separate from Java build failures.
 
-## 25. Version history
+## 29. Version history
 
 - v3.2.0 — Retry and resilience
 - v3.3.0 — Advanced reporting and execution logs
@@ -437,11 +492,12 @@ The GitHub Actions Node/punycode messages are action-runtime deprecation warning
 - v3.9.0 — Advanced assertions and diagnostics
 - v3.10.0 — Sensitive-data redaction
 - v3.11.0 — Execution history and run comparison
-- v3.12.0 — Historical analytics, flaky-test detection, iText PDF compatibility, CI/example execution hardening, and Playwright CLI classpath fix
+- v3.12.0 — Historical analytics, flaky-test detection, PDF compatibility, CI/example execution hardening, and Playwright CLI classpath fix
+- v3.13.0 — Standardized execution errors, strict configuration validation, plan/suite validation hardening, per-test suite failure isolation, executor lifecycle cleanup, structured CLI errors, and validation tests
 
-## 26. Documentation maintenance rule
+## 30. Documentation maintenance rule
 
-This file is the canonical complete project guide. **Every future version/change must update `PROJECT_DETAILS.md` in the same change/commit**, including:
+This file is the canonical complete project guide. Every future version/change must update `PROJECT_DETAILS.md` in the same change, including:
 
 - version number;
 - new/changed classes and methods;
