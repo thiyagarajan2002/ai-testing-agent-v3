@@ -18,12 +18,18 @@ public class ExecutionResult {
         public boolean passed;
         public String details;
         public long durationMs;
+        public List<String> artifacts = new ArrayList<>();
 
         public StepResult(String action, boolean passed, String details, long durationMs) {
             this.action = action;
             this.passed = passed;
             this.details = details;
             this.durationMs = durationMs;
+        }
+
+        public StepResult(String action, boolean passed, String details, long durationMs, List<String> artifacts) {
+            this(action, passed, details, durationMs);
+            if (artifacts != null) this.artifacts.addAll(artifacts);
         }
     }
 }

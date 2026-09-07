@@ -6,22 +6,31 @@ import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestStep;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 public class UiExecutor {
     private final Config config;
+    private final FailureArtifactManager artifacts;
 
     public UiExecutor() { this(Config.load()); }
-    public UiExecutor(Config config) { this.config = config; }
+    public UiExecutor(Config config) {
+        this.config = config;
+        this.artifacts = new FailureArtifactManager(config);
+    }
 
     public ExecutionResult execute(TestPlan plan) {
         if (plan == null) throw new IllegalArgumentException("UI plan cannot be null");
         if (plan.steps == null || plan.steps.isEmpty()) throw new IllegalArgumentException("UI plan contains no steps");
         if (plan.baseUrl == null || plan.baseUrl.isBlank()) throw new IllegalArgumentException("UI baseUrl is required");
-        ExecutionResult result = new ExecutionResult(); result.testName = plan.name; result.passed = true;
+        ExecutionResult result = new ExecutionResult();
+        result.testName = plan.name;
+        result.passed = true;
         try (Playwright playwright = Playwright.create()) {
             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(config.headless()));
-            Page page = browser.newPage(); page.setDefaultTimeout(config.defaultTimeoutMs());
-            for (TestStep step : plan.steps) {
+            Page page = browser.newPage();
+            page.setDefaultTimeout(config.defaultTimeoutMs());
+            for (int index = 0; index < plan.steps.size(); index++) {
+                TestStep step = plan.steps.get(index);
                 long start = System.currentTimeMillis();
                 try {
                     if (step.timeoutMs > 0) page.setDefaultTimeout(step.timeoutMs);
@@ -34,22 +43,49 @@ public class UiExecutor {
                         case "press" -> page.locator(locator).press(value);
                         case "selectoption" -> page.locator(locator).selectOption(value);
                         case "assertvisible" -> { if (!page.locator(locator).isVisible()) throw new AssertionError("Not visible: " + locator); }
-                        case "asserttext" -> { String actual=page.locator(locator).innerText(); if (!actual.contains(value)) throw new AssertionError("Expected text '"+value+"', actual='"+actual+"'"); }
-                        case "assertvalue" -> { String actual=page.locator(locator).inputValue(); if (!actual.equals(value)) throw new AssertionError("Expected value '"+value+"', actual='"+actual+"'"); }
+                        case "asserttext" -> { String actual = page.locator(locator).innerText(); if (!actual.contains(value)) throw new AssertionError("Expected text '" + value + "', actual='" + actual + "'"); }
+                        case "assertvalue" -> { String actual = page.locator(locator).inputValue(); if (!actual.equals(value)) throw new AssertionError("Expected value '" + value + "', actual='" + actual + "'"); }
                         case "waitfor" -> page.waitForTimeout(Long.parseLong(value));
-                        case "screenshot" -> { Path dir=Path.of(config.reportsDir(), config.screenshotsDir()); Files.createDirectories(dir); page.screenshot(new Page.ScreenshotOptions().setPath(dir.resolve(safe(value,"screenshot.png")))); }
+                        case "screenshot" -> {
+                            Path dir = Path.of(config.reportsDir(), config.screenshotsDir());
+                            Files.createDirectories(dir);
+                            page.screenshot(new Page.ScreenshotOptions().setPath(dir.resolve(FailureArtifactManager.safe(value, "screenshot.png"))));
+                        }
                         default -> throw new IllegalArgumentException("Unsupported UI action: " + step.action);
                     }
-                    result.steps.add(new ExecutionResult.StepResult(step.action,true,"OK",System.currentTimeMillis()-start));
+                    result.steps.add(new ExecutionResult.StepResult(step.action, true, "OK", System.currentTimeMillis() - start));
                 } catch (Exception e) {
-                    result.passed=false; captureFailure(page,result.steps.size()); result.steps.add(new ExecutionResult.StepResult(step.action,false,e.toString(),System.currentTimeMillis()-start)); break;
+                    result.passed = false;
+                    Path screenshot = captureFailure(page, plan.name, index);
+                    Path metadata = artifacts.createFailureMetadata(plan.name, index, step.action, e.toString());
+                    List<String> files = screenshot == null ? List.of(metadata.toString()) : List.of(screenshot.toString(), metadata.toString());
+                    result.steps.add(new ExecutionResult.StepResult(step.action, false, e.toString(), System.currentTimeMillis() - start, files));
+                    break;
                 }
             }
             browser.close();
-        } catch (Exception e) { result.passed=false; result.steps.add(new ExecutionResult.StepResult("browser-start",false,e.toString(),0)); }
+        } catch (Exception e) {
+            result.passed = false;
+            result.steps.add(new ExecutionResult.StepResult("browser-start", false, e.toString(), 0));
+        }
         return result;
     }
-    private String resolve(String base,String value){if(value.startsWith("http://")||value.startsWith("https://"))return value;return base.replaceAll("/$","")+"/"+value.replaceFirst("^/","");}
-    private void captureFailure(Page page,int index){try{Path dir=Path.of(config.reportsDir(),config.screenshotsDir());Files.createDirectories(dir);page.screenshot(new Page.ScreenshotOptions().setPath(dir.resolve("failure-"+index+".png")));}catch(Exception ignored){}}
-    private String safe(String name,String fallback){return name==null||name.isBlank()?fallback:name.replaceAll("[^a-zA-Z0-9._-]","_");}
+
+    private String resolve(String base, String value) {
+        if (value.startsWith("http://") || value.startsWith("https://")) return value;
+        return base.replaceAll("/$", "") + "/" + value.replaceFirst("^/", "");
+    }
+
+    private Path captureFailure(Page page, String testName, int index) {
+        try {
+            Path dir = Path.of(config.reportsDir(), config.screenshotsDir());
+            Files.createDirectories(dir);
+            String name = FailureArtifactManager.safe(testName, "test") + "-step-" + (index + 1) + "-failure.png";
+            Path file = dir.resolve(name);
+            page.screenshot(new Page.ScreenshotOptions().setPath(file));
+            return file;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
 }
