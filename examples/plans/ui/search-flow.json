@@ -1,0 +1,13 @@
+{
+  "name": "UI SauceDemo Product Search",
+  "type": "UI",
+  "baseUrl": "https://www.saucedemo.com",
+  "steps": [
+    {"action": "navigate", "value": "/"},
+    {"action": "fill", "locator": "#user-name", "value": "standard_user"},
+    {"action": "fill", "locator": "#password", "value": "secret_sauce"},
+    {"action": "click", "locator": "#login-button"},
+    {"action": "click", "locator": "#add-to-cart-sauce-labs-backpack"},
+    {"action": "assertvisible", "locator": ".shopping_cart_badge"}
+  ]
+}
