@@ -54,19 +54,45 @@ class SuiteExecutionEngineTest {
     }
 
     @Test
-    void rejectsPlanPathOutsideSuiteDirectory() throws Exception {
+    void rejectsPlanPathOutsideSuiteWorkspace() throws Exception {
         Path dir = Files.createTempDirectory("suite-path-");
-        Path outside = Files.createTempFile("outside-", ".json");
+        Path outside = dir.getParent().getParent().resolve("outside-suite-plan.json").toAbsolutePath().normalize();
         Files.writeString(outside, "{\"name\":\"outside\",\"type\":\"API\",\"baseUrl\":\"http://localhost\",\"steps\":[{\"action\":\"GET\",\"path\":\"/\"}]}" );
 
         TestSuite suite = new TestSuite();
-        suite.plans.add("../" + outside.getFileName());
+        suite.plans.add("../../" + outside.getFileName());
 
         AgentRunner runner = new AgentRunner((OllamaClient) null, new ObjectMapper());
         AgentExecutionException error = assertThrows(AgentExecutionException.class,
                 () -> new SuiteExecutionEngine(new ObjectMapper(), runner, 2).execute(suite, dir));
         assertEquals(AgentExecutionException.Category.SUITE_VALIDATION, error.category());
-        assertTrue(error.getMessage().contains("escapes suite directory"));
+        assertTrue(error.getMessage().contains("escapes suite workspace"));
+        Files.deleteIfExists(outside);
+    }
+
+    @Test
+    void allowsPlanInSiblingDirectoryWithinSuiteWorkspace() throws Exception {
+        Path workspace = Files.createTempDirectory("suite-workspace-");
+        Path suiteDir = Files.createDirectories(workspace.resolve("suites"));
+        Path plansDir = Files.createDirectories(workspace.resolve("plans"));
+        writePlan(plansDir.resolve("one.json"), "one");
+
+        TestSuite suite = new TestSuite();
+        suite.plans.add("../plans/one.json");
+
+        AgentRunner runner = new AgentRunner((OllamaClient) null, new ObjectMapper()) {
+            @Override
+            public ExecutionResult execute(TestPlan plan) {
+                ExecutionResult result = new ExecutionResult();
+                result.testName = plan.name;
+                result.passed = true;
+                return result;
+            }
+        };
+
+        SuiteExecutionResult result = new SuiteExecutionEngine(new ObjectMapper(), runner, 1).execute(suite, suiteDir);
+        assertEquals("PASS", result.status);
+        assertEquals("one", result.tests.get(0).testName);
     }
 
     private void writePlan(Path path, String name) throws Exception {
