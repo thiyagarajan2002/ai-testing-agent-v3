@@ -1,0 +1,15 @@
+{
+  "name": "API Query Parameters and Headers",
+  "type": "API",
+  "baseUrl": "https://httpbin.org",
+  "steps": [
+    {
+      "action": "GET",
+      "path": "/anything/search",
+      "query": {"q":"playwright","page":"1"},
+      "headers": {"X-Test-Client":"ai-testing-agent","Accept":"application/json"},
+      "assertSpec": {"status": 200, "contains": "playwright"},
+      "timeoutMs": 30000
+    }
+  ]
+}
