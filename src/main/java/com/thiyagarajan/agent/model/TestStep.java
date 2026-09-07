@@ -10,6 +10,8 @@ public class TestStep {
     public String value = "";
     public String body = "";
     public int timeoutMs = 30000;
+    /** Number of retries after the first attempt. Null uses the global RETRIES configuration. */
+    public Integer retryCount;
     public Map<String, String> headers = new LinkedHashMap<>();
     public Map<String, String> query = new LinkedHashMap<>();
     public AssertionSpec assertSpec = new AssertionSpec();
