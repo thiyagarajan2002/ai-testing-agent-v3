@@ -1,104 +1,81 @@
-# AI Testing Agent — v3.12.0
+# AI Testing Agent — v3.13.0
 
-AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, Playwright, and iText reporting.
+AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, Playwright, and advanced reporting.
+
+## v3.13.0 — Execution Reliability & Error Handling
+
+v3.13 hardens the execution pipeline without changing the existing API/UI test-plan model.
+
+### Improvements
+- Added standardized `AgentExecutionException` with stable error categories.
+- Added strict `Config` validation for Ollama settings, timeout, retries, parallelism, and output directories.
+- Invalid integer environment variables now produce explicit configuration errors instead of silently falling back.
+- Added plan and suite JSON validation diagnostics.
+- Added structured CLI error handling with deterministic exit code `2` for application/configuration/infrastructure errors.
+- Suite test failures are isolated so one broken plan does not stop independent plans.
+- Suite executor interruption is handled safely and the interrupt flag is restored.
+- Executor shutdown now waits for worker termination and forces shutdown when necessary.
+- Plan paths are normalized and prevented from escaping the suite directory.
+- Added configuration and plan-validation unit tests.
+
+### Error categories
+
+```text
+CONFIGURATION
+PLAN_VALIDATION
+SUITE_VALIDATION
+API_EXECUTION
+UI_EXECUTION
+ASSERTION
+AI_GENERATION
+REPORTING
+INFRASTRUCTURE
+```
+
+### Exit codes
+
+```text
+0 = success
+1 = executed test/plan/suite failed
+2 = configuration, validation, or infrastructure/application error
+```
 
 ## v3.12.0 — Historical Analytics & Flaky-Test Detection
 
-Version 3.12 extends v3.11 execution history with historical analytics, flaky-test detection, and a dedicated analytics dashboard.
-
-### New capabilities
-- Historical suite execution analytics across the latest 20 runs by default.
-- Flaky-test detection based on pass/fail status transitions.
-- Configurable flaky threshold between `0.0` and `1.0`.
-- Top 10 slowest tests by average execution duration.
+- Historical suite analytics across recent runs.
+- Flaky-test detection based on PASS/FAIL status transitions.
+- Top slowest tests by average duration.
 - `analytics.html`, `analytics.json`, and `analytics.csv`.
-- Existing regression/fixed/new/removed comparison from v3.11 remains available.
+- Regression/fixed/new/removed comparison remains available.
 - Sensitive values are redacted before analytics output.
 
-### Flaky detection
-
-For a test with `N` executions:
+Flakiness rate:
 
 ```text
-flakinessRate = statusChanges / (N - 1)
+statusChanges / (executions - 1)
 ```
 
-A test is considered flaky when it has at least two executions, both PASS and FAIL results, and its rate is at or above the configured threshold.
-
-### PDF compatibility fix
-
-The project uses iText `9.3.0`. The available API in this dependency setup does not provide `setBold()` on `Paragraph` or `Text`; PDF headings therefore use supported APIs only.
-
-## CI/CD — every push validates every example
+## CI/CD
 
 The GitHub Actions workflow runs on every push to `main`, pull requests to `main`, and manual dispatch.
 
-The pipeline now deliberately **compiles the project before invoking the Playwright Java CLI**. This prevents the previous `ClassNotFoundException: com.thiyagarajan.agent.Main` failure caused by invoking the Maven exec goal before `target/classes` had been created.
-
-CI stages:
+CI order:
 
 1. Checkout with `actions/checkout@v5`.
-2. Install Java 21 with `actions/setup-java@v5`.
-3. `mvn clean -DskipTests compile`.
-4. Install Chromium through the dedicated Maven `playwright-cli` execution.
-5. `mvn verify` for the full unit/integration test gate.
-6. Run `scripts/ci/run-examples.sh`.
-7. Upload reports, screenshots, Surefire results, and generated example files.
+2. Java 21 with `actions/setup-java@v5`.
+3. Compile with `mvn clean -DskipTests compile`.
+4. Install Chromium using `exec:java@playwright-cli`.
+5. Run `mvn verify`.
+6. Run all repository examples.
+7. Upload reports and test artifacts.
 
-### Every example is executed
+The compile-before-Playwright step fixes the previous clean-runner `ClassNotFoundException: com.thiyagarajan.agent.Main` problem.
 
-The example runner:
+### All examples are executed
 
-1. Validates `examples/api-requirement.txt`.
-2. Validates `examples/ui-requirement.txt`.
-3. Parses every JSON example under `examples/`.
-4. Executes `examples/v3-plan-file.json`.
-5. Executes `examples/v3-suite.json`.
-6. Extracts and executes the API section from `examples/v2-execution.json`.
-7. Extracts and executes the UI section from `examples/v2-execution.json`.
+`scripts/ci/run-examples.sh` validates the requirement fixtures, parses every JSON example, executes the v3 plan and suite, and executes both API and UI sections from the legacy v2 example.
 
-The requirement `.txt` files are AI input fixtures, so CI validates their content rather than invoking Ollama. This keeps CI deterministic while continuously checking every repository example.
-
-## Complete documentation
-
-`PROJECT_DETAILS.md` is the canonical detailed project guide. It documents architecture, package responsibilities, important methods, configuration, test-plan schema, assertions, retries, UI/API execution, reports, failure artifacts, security redaction, suite/history/analytics behavior, all examples, CI behavior, troubleshooting, development commands, bug fixes, and the rule to update documentation with every future change.
-
-## v3.11.0 — Test Execution History & Run Comparison
-
-- Every suite execution is snapshotted under `reports/history/<run-id>/`.
-- Stable comparison identity uses `planFile + testName`.
-- Categories: `REGRESSION`, `FIXED`, `PASSED_UNCHANGED`, `FAILED_UNCHANGED`, `NEW_TEST`, `REMOVED_TEST`.
-- Tracks pass-rate and duration deltas.
-- Writes comparison JSON/CSV/HTML.
-- Maintains browsable history index.
-- Duplicate stable test identities are rejected.
-- History failures cannot change the suite pass/fail result.
-- Global `RETRIES` is used when an API step omits `retryCount`.
-- Interactive EOF is handled safely.
-
-## v3.10.0 — Secure Secrets & Sensitive Data Redaction
-
-Centralized `SecurityRedactor` masks passwords, secrets, tokens, API keys, client secrets, authorization values, cookies, common authentication headers, and sensitive environment-variable values before logs, reports, failure artifacts, or AI failure-analysis prompts are persisted/transmitted.
-
-## v3.9.0 — Advanced Assertions & Validation Diagnostics
-
-Supported API assertions include status, body contains/not-contains, regex, response headers, JSONPath exists/equality/contains/regex, and response-time limits. Legacy `assertSpec` remains supported.
-
-## v3.8.0 — Test Data Management & Environment Profiles
-
-Profiles can provide base URLs, headers, variables, timeouts, and JSON test data. Placeholders: `${profile.X}`, `${data.X}`, `${env.X}`.
-
-## v3.7.0 — CI/CD & GitHub Actions
-
-Java 21, Maven verification, report artifacts, and Playwright support were introduced. The current workflow additionally executes all examples after the unit-test gate.
-
-## v3.6.0 — Test Suite & Parallel Execution
-
-Multiple JSON plans execute in parallel with configurable workers. Each test gets isolated executor state. Suite reports are produced in HTML, CSV, PDF, and JSON with individual test reports.
-
-## v3.5.0 — PDF Reporting & Dashboard
-
-Executions produce HTML, CSV, PDF, JSON, and execution logs.
+Requirement `.txt` files are validated as AI input fixtures rather than requiring Ollama in CI.
 
 ## Architecture
 
@@ -123,11 +100,13 @@ History / Comparison / Analytics dashboards
 | `OLLAMA_URL` | `http://localhost:11434` | Ollama server |
 | `OLLAMA_MODEL` | `llama3.2` | Ollama model |
 | `HEADLESS` | `true` | Playwright headless execution |
-| `DEFAULT_TIMEOUT_MS` | `30000` | Default API/UI timeout |
+| `DEFAULT_TIMEOUT_MS` | `30000` | Default timeout |
 | `RETRIES` | `0` | Default API retries |
 | `PARALLELISM` | `4` | Maximum suite workers |
 | `REPORTS_DIR` | `reports` | Report/history root |
 | `SCREENSHOTS_DIR` | `screenshots` | Failure-artifact root |
+
+Invalid configuration values now fail explicitly during startup.
 
 ## Build and test
 
@@ -141,7 +120,7 @@ Install Chromium locally:
 mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
 ```
 
-Run all examples locally:
+Run all examples:
 
 ```bash
 bash scripts/ci/run-examples.sh
@@ -159,29 +138,39 @@ Run a suite:
 mvn exec:java -Dexec.args="suite examples/v3-suite.json"
 ```
 
-## CI troubleshooting
+## Reporting
 
-### `ClassNotFoundException: com.thiyagarajan.agent.Main`
+The framework produces JSON, CSV, HTML and PDF execution reports plus suite/history/analytics dashboards and failure artifacts.
 
-Do not invoke `exec:java` before the project has been compiled. Use the configured Playwright execution after compilation:
+## Security
+
+`SecurityRedactor` masks passwords, secrets, tokens, API keys, client secrets, authorization values, cookies, and sensitive environment-variable values before persistence or AI failure analysis.
+
+## Troubleshooting
+
+### ClassNotFoundException during Playwright installation
+
+Compile before invoking the dedicated Playwright CLI:
 
 ```bash
 mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
 ```
 
-The workflow follows the same order.
+### Invalid configuration
 
-### No artifacts found
+Check `OLLAMA_URL`, `OLLAMA_MODEL`, `DEFAULT_TIMEOUT_MS`, `RETRIES`, `PARALLELISM`, `REPORTS_DIR`, and `SCREENSHOTS_DIR`. v3.13 reports the configuration category and invalid value instead of silently accepting malformed numeric settings.
 
-Artifact upload is intentionally `if: always()` and `if-no-files-found: ignore`. If an earlier build step fails before generating reports, no artifact is expected. Once the test/example stages run, generated output is collected automatically.
+### Suite contains one failing plan
 
-### GitHub Actions Node deprecation warnings
-
-The workflow uses the current v5 releases of checkout, setup-java, and upload-artifact to avoid the older Node 20 action runtime warning. Third-party/transitive Node warnings from action internals may still appear if GitHub changes runner behavior; they are not Java project failures.
+v3.13 isolates individual plan execution failures and continues independent suite tasks. The final suite remains `FAIL`, while the report identifies the failed plan and its category.
 
 ### External example service failure
 
-The v2/v3 executable examples use public API/UI services. If those services are unavailable, CI correctly fails the example stage. Investigate service availability rather than hiding or skipping the example.
+The executable examples use public API/UI services. CI correctly reports service availability failures rather than hiding or skipping them.
+
+## Complete documentation
+
+`PROJECT_DETAILS.md` is the canonical implementation and operations guide. Every future version must update it with code changes, methods, configuration, tests, CI behavior, bugs, commands, and troubleshooting.
 
 ## Version history
 
@@ -195,4 +184,5 @@ The v2/v3 executable examples use public API/UI services. If those services are 
 - v3.9.0 — Advanced assertions
 - v3.10.0 — Sensitive-data redaction
 - v3.11.0 — Execution history and run comparison
-- v3.12.0 — Historical analytics, flaky-test detection, iText PDF compatibility, and CI/example execution hardening
+- v3.12.0 — Historical analytics, flaky-test detection, PDF compatibility, and CI hardening
+- v3.13.0 — Execution reliability, standardized errors, strict configuration validation, suite failure isolation, executor lifecycle hardening, structured CLI errors, and validation tests
