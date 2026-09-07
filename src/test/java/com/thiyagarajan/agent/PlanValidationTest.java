@@ -2,6 +2,7 @@ package com.thiyagarajan.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thiyagarajan.agent.model.TestPlan;
+import com.thiyagarajan.agent.runtime.AgentExecutionException;
 import com.thiyagarajan.agent.runtime.AgentRunner;
 import org.junit.jupiter.api.Test;
 
@@ -54,7 +55,8 @@ class PlanValidationTest {
         """, TestPlan.class);
 
         AgentRunner runner = new AgentRunner(null, new ObjectMapper());
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> runner.execute(plan));
+        AgentExecutionException error = assertThrows(AgentExecutionException.class, () -> runner.execute(plan));
+        assertEquals(AgentExecutionException.Category.PLAN_VALIDATION, error.category());
         assertEquals("retryCount cannot be negative", error.getMessage());
     }
 }
