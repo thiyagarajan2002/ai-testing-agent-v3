@@ -1,0 +1,13 @@
+{
+  "name": "qa",
+  "baseUrl": "https://qa.example.com/api",
+  "timeoutMs": 15000,
+  "dataFile": "config/test-data/qa.json",
+  "variables": {
+    "tenant": "demo"
+  },
+  "headers": {
+    "Accept": "application/json",
+    "X-Tenant": "${profile.tenant}"
+  }
+}
