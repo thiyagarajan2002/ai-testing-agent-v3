@@ -14,17 +14,21 @@ public final class PromptManager {
           "baseUrl": "string or empty",
           "steps": [
             {
-              "action": "GET|POST|PUT|PATCH|DELETE|navigate|click|fill|press|selectOption|assertVisible|assertText|screenshot",
+              "action": "GET|POST|PUT|PATCH|DELETE|navigate|click|fill|press|selectOption|assertVisible|assertText|assertValue|waitFor|screenshot",
               "path": "string",
               "locator": "string",
               "value": "string",
               "body": "string",
-              "assert": {
+              "assertSpec": {
                 "status": 200,
                 "contains": "string",
-                "jsonPath": "string",
-                "equals": "string"
+                "jsonPath": "$.id",
+                "equals": "string",
+                "responseTimeMs": 1000
               },
+              "assertions": [
+                {"type":"status|bodyContains|bodyNotContains|bodyRegex|headerEquals|jsonPathExists|jsonPathEquals|jsonPathContains|jsonPathRegex|responseTimeMs", "path":"header-name-or-json-path", "expected":"value-or-pattern"}
+              ],
               "save": {
                 "variableName": "$.json.path"
               }
@@ -40,6 +44,9 @@ public final class PromptManager {
         5. If an API endpoint is supplied, preserve it.
         6. Use an empty baseUrl when none is supplied.
         7. Prefer assertions that are directly requested.
+        8. Use the legacy assertSpec for simple status/body/jsonPath checks; use assertions when multiple or advanced checks are needed.
+        9. For headerEquals, put the header name in path and the expected header value in expected.
+        10. For jsonPathExists, expected may be true or false.
 
         Requirement:
         """ + requirement;
