@@ -1,0 +1,9 @@
+{
+  "name": "UI Navigation Smoke",
+  "type": "UI",
+  "baseUrl": "https://www.saucedemo.com",
+  "steps": [
+    {"action":"navigate","value":"/"},
+    {"action":"assertvisible","locator":"#login-button"}
+  ]
+}
