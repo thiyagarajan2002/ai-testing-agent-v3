@@ -1,44 +1,61 @@
-# AI Testing Agent — v3.13.0
+# AI Testing Agent — v3.14.0
 
 AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, Playwright, and advanced reporting.
 
-## v3.13.0 — Execution Reliability & Error Handling
+## v3.14.0 — Execution Architecture Refactor
 
-v3.13 hardens the execution pipeline without changing the existing API/UI test-plan model.
+v3.14 introduces a dedicated `TestOrchestrator` layer between the CLI and runtime components. The goal is to keep `Main` focused on command-line concerns while centralizing execution lifecycle, environment handling, reporting, and suite history coordination.
 
 ### Improvements
-- Added standardized `AgentExecutionException` with stable error categories.
-- Added strict `Config` validation for Ollama settings, timeout, retries, parallelism, and output directories.
-- Invalid integer environment variables now produce explicit configuration errors instead of silently falling back.
-- Added plan and suite JSON validation diagnostics.
-- Added structured CLI error handling with deterministic exit code `2` for application/configuration/infrastructure errors.
-- Suite test failures are isolated so one broken plan does not stop independent plans.
-- Suite executor interruption is handled safely and the interrupt flag is restored.
-- Executor shutdown now waits for worker termination and forces shutdown when necessary.
-- Plan paths are normalized and prevented from escaping the suite directory.
-- Added configuration and plan-validation unit tests.
+- Added `TestOrchestrator` as the execution coordination layer.
+- Reduced `Main` to CLI dispatch, interactive input, output, and exit-code handling.
+- Centralized plan file validation and JSON loading.
+- Centralized suite file validation and suite execution/reporting.
+- Centralized optional environment-profile application.
+- Centralized failure-analysis handling for plan execution.
+- Preserved deterministic exit codes: `0` success, `1` executed test failure, `2` application/configuration/validation/infrastructure error.
+- Added orchestrator validation tests for null dependencies and missing plan/suite files.
+- Existing `AgentRunner`, API/UI executors, suite engine, reports, history, analytics, and redaction remain reusable components.
 
-### Error categories
-
-```text
-CONFIGURATION
-PLAN_VALIDATION
-SUITE_VALIDATION
-API_EXECUTION
-UI_EXECUTION
-ASSERTION
-AI_GENERATION
-REPORTING
-INFRASTRUCTURE
-```
-
-### Exit codes
+### Architecture
 
 ```text
-0 = success
-1 = executed test/plan/suite failed
-2 = configuration, validation, or infrastructure/application error
+CLI
+ │
+ ▼
+Main
+ │  command dispatch / interactive input / exit code
+ ▼
+TestOrchestrator
+ ├── Config
+ ├── EnvironmentManager
+ ├── AgentRunner
+ ├── ReportManager
+ └── SuiteReportManager
+      │
+      ▼
+ AgentRunner
+ ├── API Executor
+ └── UI Executor
+      │
+      ▼
+ ExecutionResult / SuiteExecutionResult
+      │
+      ├── Reports
+      ├── Failure Analysis
+      └── History / Analytics
 ```
+
+## v3.13.0 — Execution Reliability & Error Handling
+
+- Standardized `AgentExecutionException` with stable error categories.
+- Strict runtime configuration validation.
+- Plan and suite JSON validation diagnostics.
+- Structured CLI error handling.
+- Per-test suite failure isolation.
+- Safe executor interruption and shutdown.
+- Suite-root path traversal protection.
+- Validation unit tests.
 
 ## v3.12.0 — Historical Analytics & Flaky-Test Detection
 
@@ -48,12 +65,6 @@ INFRASTRUCTURE
 - `analytics.html`, `analytics.json`, and `analytics.csv`.
 - Regression/fixed/new/removed comparison remains available.
 - Sensitive values are redacted before analytics output.
-
-Flakiness rate:
-
-```text
-statusChanges / (executions - 1)
-```
 
 ## CI/CD
 
@@ -71,27 +82,11 @@ CI order:
 
 The compile-before-Playwright step fixes the previous clean-runner `ClassNotFoundException: com.thiyagarajan.agent.Main` problem.
 
-### All examples are executed
+## All examples are executed
 
 `scripts/ci/run-examples.sh` validates the requirement fixtures, parses every JSON example, executes the v3 plan and suite, and executes both API and UI sections from the legacy v2 example.
 
 Requirement `.txt` files are validated as AI input fixtures rather than requiring Ollama in CI.
-
-## Architecture
-
-```text
-Requirement → PromptManager → OllamaClient → TestPlan
-                                      ↓
-EnvironmentManager → AgentRunner → API/UI Executors
-                                      ↓
-ExecutionResult / SuiteExecutionResult
-                                      ↓
-SecurityRedactor → Reports
-                                      ↓
-RunHistoryManager → HistoryAnalyticsManager
-                                      ↓
-History / Comparison / Analytics dashboards
-```
 
 ## Configuration
 
@@ -105,8 +100,6 @@ History / Comparison / Analytics dashboards
 | `PARALLELISM` | `4` | Maximum suite workers |
 | `REPORTS_DIR` | `reports` | Report/history root |
 | `SCREENSHOTS_DIR` | `screenshots` | Failure-artifact root |
-
-Invalid configuration values now fail explicitly during startup.
 
 ## Build and test
 
@@ -138,6 +131,20 @@ Run a suite:
 mvn exec:java -Dexec.args="suite examples/v3-suite.json"
 ```
 
+Interactive mode:
+
+```bash
+mvn exec:java -Dexec.args="interactive"
+```
+
+## Exit codes
+
+```text
+0 = successful execution
+1 = executed plan/test/suite failed
+2 = configuration, validation, application, or infrastructure error
+```
+
 ## Reporting
 
 The framework produces JSON, CSV, HTML and PDF execution reports plus suite/history/analytics dashboards and failure artifacts.
@@ -146,31 +153,9 @@ The framework produces JSON, CSV, HTML and PDF execution reports plus suite/hist
 
 `SecurityRedactor` masks passwords, secrets, tokens, API keys, client secrets, authorization values, cookies, and sensitive environment-variable values before persistence or AI failure analysis.
 
-## Troubleshooting
-
-### ClassNotFoundException during Playwright installation
-
-Compile before invoking the dedicated Playwright CLI:
-
-```bash
-mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
-```
-
-### Invalid configuration
-
-Check `OLLAMA_URL`, `OLLAMA_MODEL`, `DEFAULT_TIMEOUT_MS`, `RETRIES`, `PARALLELISM`, `REPORTS_DIR`, and `SCREENSHOTS_DIR`. v3.13 reports the configuration category and invalid value instead of silently accepting malformed numeric settings.
-
-### Suite contains one failing plan
-
-v3.13 isolates individual plan execution failures and continues independent suite tasks. The final suite remains `FAIL`, while the report identifies the failed plan and its category.
-
-### External example service failure
-
-The executable examples use public API/UI services. CI correctly reports service availability failures rather than hiding or skipping them.
-
 ## Complete documentation
 
-`PROJECT_DETAILS.md` is the canonical implementation and operations guide. Every future version must update it with code changes, methods, configuration, tests, CI behavior, bugs, commands, and troubleshooting.
+`PROJECT_DETAILS.md` remains the canonical detailed implementation and operations guide. The v3.14 architecture change adds `TestOrchestrator` as the lifecycle coordination layer and keeps `Main` as a thin CLI entry point.
 
 ## Version history
 
@@ -186,3 +171,4 @@ The executable examples use public API/UI services. CI correctly reports service
 - v3.11.0 — Execution history and run comparison
 - v3.12.0 — Historical analytics, flaky-test detection, PDF compatibility, and CI hardening
 - v3.13.0 — Execution reliability, standardized errors, strict configuration validation, suite failure isolation, executor lifecycle hardening, structured CLI errors, and validation tests
+- v3.14.0 — TestOrchestrator execution architecture refactor and CLI simplification
