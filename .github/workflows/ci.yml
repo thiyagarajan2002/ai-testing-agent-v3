@@ -13,7 +13,7 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       HEADLESS: 'true'
       PARALLELISM: '4'
@@ -21,27 +21,30 @@ jobs:
       RETRIES: '1'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
 
+      - name: Compile project before Playwright CLI
+        run: mvn -B --no-transfer-progress clean -DskipTests compile
+
       - name: Install Playwright Chromium
-        run: mvn -B --no-transfer-progress -DskipTests exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"
+        run: mvn -B --no-transfer-progress -DskipTests exec:java@playwright-cli -Dexec.args="install chromium"
 
       - name: Build and unit test
-        run: mvn -B --no-transfer-progress clean verify
+        run: mvn -B --no-transfer-progress verify
 
       - name: Run all repository examples
         run: bash scripts/ci/run-examples.sh
 
       - name: Upload test and example reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ai-testing-agent-ci-reports
           path: |
