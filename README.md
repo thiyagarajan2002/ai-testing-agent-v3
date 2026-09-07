@@ -1,34 +1,60 @@
-# AI Testing Agent — v3.16.0
+# AI Testing Agent — v3.17.0
 
-AI-assisted API and UI test planning and execution using Java 21, Ollama, REST Assured, Playwright, environment profiles, retries, assertions, failure artifacts, advanced reports, suite execution, history/analytics, security redaction, preflight validation, and data-driven execution.
+AI-assisted API and UI test planning and execution using Java 21, Ollama, REST ASSURED, Playwright, environment profiles, retries, assertions, failure artifacts, reporting, suite execution, history/analytics, security redaction, preflight validation, and data-driven execution.
 
-## v3.16.0 — Data-Driven Test Execution
+## v3.17.0 — Data-Driven Reporting & HTML Dashboard
 
-v3.16 adds parameterized test execution. A single API/UI test plan can now be executed repeatedly against a JSON dataset, with each row isolated from the next iteration.
+v3.17 adds reporting around the v3.16 data-driven runner. A single data-driven execution now produces an aggregate dashboard plus machine-readable JSON and CSV output. Failed iterations retain step diagnostics and AI failure analysis when available.
 
-### Features
+### Data-Driven Flow
 
-- `DataDrivenRunner` executes one plan per data row.
-- JSON dataset formats supported:
-  - a root array: `[{...},{...}]`
-  - an object containing `rows`: `{ "rows": [{...},{...}] }`
-- `${data.key}` placeholders can be used in:
-  - test name
-  - base URL
-  - variables
-  - path
-  - locator
-  - value
-  - request body
-  - headers
-  - query parameters
-  - saved variables
-  - legacy assertions
-  - v3.9 typed assertions
-- Each iteration receives a deep copy of the original plan, preventing data mutation between iterations.
-- Aggregate result reports total, passed, failed iterations and total duration.
-- Sensitive values continue to pass through the existing redaction layer.
-- Non-data-driven `plan` and `suite` commands remain unchanged.
+```text
+Plan JSON + Dataset JSON
+          |
+          v
+    DataDrivenRunner
+          |
+   +------+------+ 
+   |      |      |
+ Row 1  Row 2  Row N
+   |      |      |
+   +------+------+ 
+          |
+          v
+DataDrivenExecutionResult
+          |
+          v
+DataDrivenReportManager
+   |       |       |
+ HTML    JSON     CSV
+```
+
+### Reports
+
+Reports are written under:
+
+```text
+reports/data-driven/<safe-test-name>/
+```
+
+Files:
+
+- `data-driven-report.html` — interactive browser-friendly dashboard.
+- `data-driven-report.json` — complete aggregate and iteration structure.
+- `data-driven-report.csv` — one row per iteration for spreadsheet/CI processing.
+
+The HTML dashboard displays:
+
+- overall PASS/FAIL status
+- total, passed and failed iterations
+- pass percentage
+- total duration
+- dataset values per iteration
+- failed-row diagnostics
+- step-level status, duration and details
+- links to JSON and CSV reports
+
+Sensitive dataset values are redacted before being rendered in CSV/HTML diagnostics.
 
 ## Data-Driven CLI
 
@@ -42,7 +68,24 @@ With an environment profile:
 mvn exec:java -Dexec.args="data-driven examples/v3.16-data-driven-plan.json examples/v3.16-data.json --env qa"
 ```
 
-Example dataset:
+The CLI prints the generated report directory, for example:
+
+```text
+Reports: ./reports/data-driven/Get_user_-_data_driven/
+```
+
+## Data-Driven Dataset
+
+Supported JSON formats:
+
+```json
+[
+  {"userId":"1", "expectedName":"Leanne Graham"},
+  {"userId":"2", "expectedName":"Ervin Howell"}
+]
+```
+
+or:
 
 ```json
 {
@@ -53,37 +96,27 @@ Example dataset:
 }
 ```
 
-Example plan:
-
-```json
-{
-  "name": "Get user - data driven",
-  "type": "API",
-  "baseUrl": "https://jsonplaceholder.typicode.com",
-  "steps": [
-    {
-      "action": "GET",
-      "path": "/users/${data.userId}",
-      "assertions": [
-        {"type":"status", "expected":"200"},
-        {"type":"bodyContains", "expected":"${data.expectedName}"}
-      ]
-    }
-  ]
-}
-```
+Use `${data.key}` placeholders in plan fields including path, body, headers, query, variables, locators and assertions.
 
 ## Result Semantics
 
-A data-driven execution passes only when every dataset iteration passes. Individual iteration results retain their original `ExecutionResult`, making failures traceable to the corresponding row/index.
+A data-driven execution passes only when every dataset iteration passes and at least one iteration exists. Each iteration contains its row index, row data, duration and original `ExecutionResult`.
 
-## Validation
+Failed iterations are analyzed through the existing AI failure-analysis pipeline before the aggregate reports are generated. If AI analysis is unavailable, a safe fallback diagnostic is retained.
 
-The existing v3.15 preflight commands remain available:
+## Security
+
+Do not put production credentials directly into plans or datasets. The centralized `SecurityRedactor` masks recognized passwords, tokens, API keys, authorization headers, cookies and other sensitive values before report diagnostics are exposed.
+
+## Existing Commands
 
 ```bash
-mvn exec:java -Dexec.args="validate plan examples/v3-plan-file.json"
-mvn exec:java -Dexec.args="validate suite examples/v3-suite.json"
+mvn exec:java -Dexec.args="plan <file>"
+mvn exec:java -Dexec.args="suite <file>"
+mvn exec:java -Dexec.args="data-driven <plan> <data-file>"
+mvn exec:java -Dexec.args="validate plan <file>"
+mvn exec:java -Dexec.args="validate suite <file>"
+mvn exec:java -Dexec.args="interactive"
 ```
 
 ## Build and Test
@@ -98,8 +131,37 @@ Playwright Chromium installation for UI execution:
 mvn -DskipTests exec:java@playwright-cli -Dexec.args="install chromium"
 ```
 
+## Architecture
+
+```text
+CLI (Main)
+   |
+   v
+TestOrchestrator
+   |
+   +--> AgentRunner --------> Ollama
+   |       |
+   |       +---------------> API Executor / UI Executor
+   |
+   +--> DataDrivenRunner ---> isolated iteration execution
+   |          |
+   |          +-------------> DataDrivenReportManager
+   |                         |--> HTML Dashboard
+   |                         |--> JSON
+   |                         +--> CSV
+   |
+   +--> SuiteExecutionEngine
+   |
+   +--> ReportManager / SuiteReportManager
+   |
+   +--> RunHistoryManager / HistoryAnalyticsManager
+   |
+   +--> TestPlanValidator
+```
+
 ## Version History
 
+- v3.17.0 — Data-driven reporting, HTML dashboard, JSON/CSV export and failed-row diagnostics
 - v3.16.0 — Data-driven / parameterized test execution
 - v3.15.0 — Preflight validation and dry-run validation
 - v3.14.0 — History analytics and flaky-test analysis
@@ -115,33 +177,6 @@ mvn -DskipTests exec:java@playwright-cli -Dexec.args="install chromium"
 - v3.4.0 — Failure artifacts
 - v3.3.0 — Advanced reporting
 - v3.2.0 — Retry support
-
-## Architecture
-
-```text
-CLI (Main)
-   |
-   v
-TestOrchestrator
-   |
-   +--> AgentRunner --------> Ollama
-   |       |
-   |       +---------------> API Executor / UI Executor
-   |
-   +--> DataDrivenRunner ---> repeated isolated TestPlan executions
-   |
-   +--> SuiteExecutionEngine
-   |
-   +--> ReportManager / SuiteReportManager
-   |
-   +--> RunHistoryManager / HistoryAnalyticsManager
-   |
-   +--> TestPlanValidator
-```
-
-## Security
-
-Do not place production credentials directly in plans or datasets. Use environment variables/environment profiles where appropriate. The centralized `SecurityRedactor` masks recognized passwords, tokens, API keys, authorization headers, cookies, and other sensitive values before they are written to reports or supplied to failure analysis.
 
 ## Repository
 
