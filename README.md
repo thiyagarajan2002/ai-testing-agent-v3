@@ -1,38 +1,103 @@
-# AI Testing Agent — v3.20.0
+# AI Testing Agent — v3.21.0
 
 AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, retries, artifacts, reporting, suites, history/analytics, security redaction, preflight validation and data-driven execution.
 
-## v3.20.0 — Repository Organization & Engineering Standards
+## v3.21.0 — Examples, UI Evidence & Durable Logs
 
-This release standardizes the repository layout without changing runtime behavior. Documentation, examples and engineering support files are separated by purpose, and a target Java package architecture is documented for a later controlled package migration.
+This release adds a broader example library and stronger execution evidence.
 
-### Repository layout
+### API examples
 
 ```text
-ai-testing-agent-v3/
-├── .github/                 # CI/CD and repository automation
-├── config/                  # Environment profiles and reusable test data
-├── docs/                    # Architecture, configuration, testing and releases
-├── examples/                # User-facing plans, suites, data and requirements
-├── scripts/                 # Developer and CI helper scripts
-├── src/main/java/           # Production Java source
-├── src/main/resources/      # Runtime resources
-├── src/test/java/           # Automated tests
-├── src/test/resources/      # Test-only resources
-├── reports/                 # Generated runtime output (not source)
-├── pom.xml                  # Maven build definition
-├── README.md                # Quick-start documentation
-├── PROJECT_DETAILS.md       # Complete project documentation
-├── CONTRIBUTING.md          # Development standards
-├── SECURITY.md              # Security guidance
-└── LICENSE.md
+examples/plans/api/
+├── v3-plan-file.json
+├── get-user.json
+├── create-resource.json
+└── save-variable.json
 ```
 
-### Java architecture
+API suite: `examples/suites/api-smoke-suite.json`
 
-The current Java packages remain behaviorally unchanged in v3.20.0. The target architecture is documented in `docs/architecture/package-structure.md` so the next package migration can update declarations, imports, tests and CI atomically.
+Run:
 
-### Commands
+```bash
+mvn exec:java -Dexec.args="plan examples/plans/api/get-user.json"
+```
+
+Every API test creates a durable request/response log under:
+
+```text
+reports/api/logs/<test-name>-<timestamp>.log
+```
+
+The log contains timestamp, step, attempt, action, URL, request body, response status, duration, bounded response body and errors. Sensitive values are redacted before persistence.
+
+### UI examples
+
+```text
+examples/plans/ui/
+├── homepage-smoke.json
+├── login-flow.json
+├── search-flow.json
+└── negative-login.json
+```
+
+UI suite: `examples/suites/ui-smoke-suite.json`
+
+Run:
+
+```bash
+mvn exec:java -Dexec.args="plan examples/plans/ui/login-flow.json"
+```
+
+Install Chromium first when needed:
+
+```bash
+mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
+```
+
+### Automatic screenshot after every UI step
+
+Every successful UI step automatically captures a full-page screenshot. Failed UI steps capture a failure screenshot too.
+
+```text
+reports/screenshots/ui/
+├── <test-name>/
+│   ├── 001-navigate.png
+│   ├── 002-fill.png
+│   ├── 003-click.png
+│   └── 004-assertvisible.png
+└── failures/
+    └── <test-name>-step-4-failure.png
+```
+
+The screenshot path is attached to the step result. The existing explicit `screenshot` action remains supported for compatibility.
+
+### Terminal run logs
+
+The application now tees stdout/stderr: output remains visible in the terminal and is simultaneously persisted to a timestamped log.
+
+API-oriented CLI commands:
+
+```text
+reports/api/logs/terminal-<timestamp>-<command>.log
+```
+
+Interactive runs:
+
+```text
+reports/ui/logs/terminal-<timestamp>-interactive.log
+```
+
+Other commands:
+
+```text
+reports/terminal/logs/
+```
+
+The terminal log includes the command, application output/errors and final exit code.
+
+## Core commands
 
 ```bash
 mvn clean verify
@@ -44,28 +109,44 @@ mvn exec:java -Dexec.args="validate suite <file>"
 mvn exec:java -Dexec.args="interactive"
 ```
 
-## v3.19.0 — Data-Driven Parallel Execution & Performance
+## Repository layout
 
-v3.19 adds configurable parallel execution for data-driven rows while preserving dataset order in reports. It records measured iteration work, wall-clock duration and approximate speedup metrics. See `PROJECT_DETAILS.md` for complete details.
+```text
+ai-testing-agent-v3/
+├── .github/                 # CI/CD
+├── config/                  # Environment profiles and reusable data
+├── docs/                    # Architecture, configuration, testing and releases
+├── examples/                # API/UI plans, suites, datasets and requirements
+├── scripts/                 # Developer/CI helpers
+├── src/main/java/           # Production Java source
+├── src/main/resources/      # Runtime resources
+├── src/test/java/           # Automated tests
+├── src/test/resources/      # Test fixtures
+├── reports/                 # Generated runtime evidence
+├── pom.xml
+├── README.md
+├── PROJECT_DETAILS.md
+├── CONTRIBUTING.md
+└── SECURITY.md
+```
 
-## Documentation map
+## Documentation
 
-- `PROJECT_DETAILS.md` — complete implementation and method reference.
+- `PROJECT_DETAILS.md` — complete implementation, methods, execution behavior and release history.
 - `docs/architecture/` — architecture and package boundaries.
 - `docs/configuration/` — configuration guidance.
 - `docs/testing/` — testing standards.
 - `docs/releases/` — release history.
-- `examples/` — runnable examples and sample inputs.
-- `CONTRIBUTING.md` — development workflow.
-- `SECURITY.md` — security guidance.
+- `examples/README.md` — API/UI examples and evidence/logging guide.
 
 ## Security
 
-Do not store production credentials in plans or datasets. Sensitive execution diagnostics are redacted before reporting and AI failure analysis.
+Do not store production credentials in plans or datasets. Sensitive execution diagnostics, API logs and AI failure-analysis input are redacted before persistence.
 
 ## Version history
 
-- **v3.20.0** — repository organization and engineering standards
+- **v3.21.0** — comprehensive API/UI examples, automatic UI screenshots, API execution logs and terminal log persistence
+- v3.20.0 — repository organization and engineering standards
 - v3.19.0 — parallel data-driven execution, ordered results and performance metrics
 - v3.18.0 — CSV datasets, dataset validation and exact row filtering
 - v3.17.0 — data-driven reporting and HTML dashboard
