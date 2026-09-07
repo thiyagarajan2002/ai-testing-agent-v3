@@ -46,4 +46,19 @@ class TestOrchestratorTest {
             assertEquals(AgentExecutionException.Category.SUITE_VALIDATION, error.category());
         }
     }
+
+    @Test
+    void organizedSuiteWithParentRelativePlanPathPassesPreflight() throws Exception {
+        Path root = Files.createTempDirectory("orchestrator-");
+        Path suite = Path.of("examples", "suites", "v3-suite.json");
+        assertTrue(Files.isRegularFile(suite), "Repository suite fixture must exist");
+
+        try (TestOrchestrator orchestrator = new TestOrchestrator(config(root), new ObjectMapper(), null)) {
+            TestOrchestrator.PreflightSuiteResult result = orchestrator.validateSuite(suite.toString());
+            assertTrue(result.valid(), () -> "Expected valid suite preflight: " + result.plans());
+            assertEquals(1, result.plans().size());
+            assertTrue(result.plans().get(0).valid());
+            assertEquals("../plans/api/v3-plan-file.json", result.plans().get(0).file());
+        }
+    }
 }
