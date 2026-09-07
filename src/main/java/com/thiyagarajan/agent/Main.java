@@ -7,7 +7,7 @@ import com.thiyagarajan.agent.runtime.*;
 import java.util.*;
 
 public final class Main {
- private static final String VERSION="3.19.0"; private Main(){}
+ private static final String VERSION="3.20.0"; private Main(){}
  public static void main(String[] a){try{int c=run(a==null?new String[0]:a);if(c!=0)System.exit(c);}catch(AgentExecutionException e){System.err.println("Agent error ["+e.category()+"]: "+e.getMessage());System.exit(2);}catch(Exception e){System.err.println("Agent error [INFRASTRUCTURE]: "+e.getMessage());System.exit(2);}}
  static int run(String[] a)throws Exception{Config c=Config.load();ObjectMapper m=new ObjectMapper();String env=option(a,"--env");
   if(a.length>=2&&"plan".equalsIgnoreCase(a[0]))try(TestOrchestrator o=new TestOrchestrator(c,m,env)){var r=o.executePlan(a[1]);return r.passed()?0:1;}
