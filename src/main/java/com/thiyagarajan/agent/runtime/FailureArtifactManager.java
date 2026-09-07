@@ -25,7 +25,8 @@ public final class FailureArtifactManager {
 
     public Path createFailureMetadata(String testName, int stepIndex, String action, String details) throws Exception {
         Files.createDirectories(root);
-        Path file = root.resolve(safe(testName, "test") + "-step-" + (stepIndex + 1) + "-" + timestamp() + ".json");
+        String name = safe(SecurityRedactor.redactText(testName), "test");
+        Path file = root.resolve(name + "-step-" + (stepIndex + 1) + "-" + timestamp() + ".json");
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("generatedAt", OffsetDateTime.now().toString());
         data.put("testName", SecurityRedactor.redactText(testName == null ? "" : testName));
@@ -39,7 +40,8 @@ public final class FailureArtifactManager {
     public Path createApiFailureArtifact(String testName, int stepIndex, String action, String url,
                                          String requestBody, String details, String responseBody) throws Exception {
         Files.createDirectories(root);
-        Path file = root.resolve(safe(testName, "test") + "-step-" + (stepIndex + 1) + "-" + timestamp() + "-api.txt");
+        String name = safe(SecurityRedactor.redactText(testName), "test");
+        Path file = root.resolve(name + "-step-" + (stepIndex + 1) + "-" + timestamp() + "-api.txt");
         String content = "AI Testing Agent API Failure Artifact\n"
                 + "Generated: " + OffsetDateTime.now() + "\n"
                 + "Test: " + safeText(testName) + "\n"
