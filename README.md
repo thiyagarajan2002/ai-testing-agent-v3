@@ -1,24 +1,60 @@
-# AI Testing Agent — v3.18.0
+# AI Testing Agent — v3.19.0
 
 AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, retries, artifacts, reporting, suites, history/analytics, security redaction, preflight validation and data-driven execution.
 
+## v3.19.0 — Data-Driven Parallel Execution & Performance
+
+v3.19 adds configurable parallel execution for data-driven rows while preserving dataset order in reports. It also records measured iteration work, wall-clock duration and an approximate speedup metric.
+
+### Parallel execution
+
+The existing `PARALLELISM` configuration controls the default worker count for data-driven execution. Use `--parallelism` to override it for one run. Supported values are `1` through `64`.
+
+```bash
+mvn exec:java -Dexec.args="data-driven examples/v3.16-data-driven-plan.json examples/users.csv --parallelism 4"
+```
+
+`--parallelism 1` forces sequential execution. Values greater than the number of selected rows are automatically reduced to the row count.
+
+### Filters + parallelism
+
+```bash
+mvn exec:java -Dexec.args="data-driven plan.json users.csv --filter country=IN --filter active=true --parallelism 8"
+```
+
+Filters are applied before worker creation, so only matching rows consume execution workers.
+
+### Performance metrics
+
+Every data-driven result records:
+
+- `executionMode` — `SEQUENTIAL` or `PARALLEL`.
+- `parallelism` — actual worker count used.
+- `durationMs` — total wall-clock duration.
+- `estimatedSequentialDurationMs` — sum of measured iteration durations.
+- `estimatedSpeedup` — estimated sequential work divided by wall-clock duration.
+- `averageIterationDurationMs` — average measured iteration duration.
+
+The speedup is an approximation, not a benchmark guarantee, because it includes test-system, network, browser, scheduling and reporting effects.
+
+### Isolation and ordering
+
+Each worker deep-copies the template before substituting `${data.key}` values. Iterations may finish in any order, but the final result and reports are restored to original dataset order. API/UI executor state is created per test execution by `AgentRunner`.
+
 ## v3.18.0 — Advanced Data-Driven Dataset Management
 
-v3.18 adds **CSV dataset support, dataset structure validation and row filtering** while preserving the existing JSON format.
+v3.18 added CSV dataset support, dataset structure validation and row filtering while preserving JSON datasets.
 
-### Supported datasets
+Supported datasets:
 
-JSON array:
 ```json
 [{"userId":"1","expectedName":"Leanne Graham"}]
 ```
 
-JSON object:
 ```json
 {"rows":[{"userId":"1","expectedName":"Leanne Graham"}]}
 ```
 
-CSV:
 ```csv
 userId,expectedName
 1,Leanne Graham
@@ -27,33 +63,13 @@ userId,expectedName
 
 CSV headers must be non-blank and unique. Every row must contain the same number of columns as the header. Empty datasets are rejected.
 
-### CLI
-
-```bash
-mvn exec:java -Dexec.args="data-driven examples/v3.16-data-driven-plan.json examples/users.csv"
-```
-
-Filter execution to matching dataset rows:
-
-```bash
-mvn exec:java -Dexec.args="data-driven examples/v3.16-data-driven-plan.json examples/users.csv --filter userId=2"
-```
-
-Multiple filters are supported:
-
-```bash
-mvn exec:java -Dexec.args="data-driven plan.json users.csv --filter country=IN --filter active=true"
-```
-
-Filters use exact string equality. If no rows match, execution fails with `PLAN_VALIDATION` rather than silently producing a zero-iteration pass.
-
-### Data placeholders
+## Data placeholders
 
 Use `${data.key}` in plan name, base URL, variables, path, locator, value, body, headers, query, saved variables and assertions.
 
-### Reporting
+## Reporting
 
-Data-driven executions continue to generate HTML, JSON and CSV reports under:
+Data-driven executions generate HTML, JSON and CSV reports under:
 
 ```text
 reports/data-driven/<safe-test-name>/
@@ -73,7 +89,8 @@ TestOrchestrator
  |       |
  |       +--> DataDrivenDatasetReader --> JSON / CSV
  |       +--> row filters
- |       +--> isolated TestPlan execution
+ |       +--> sequential OR bounded parallel workers
+ |       +--> ordered aggregate + performance metrics
  |       +--> DataDrivenReportManager --> HTML / JSON / CSV
  +--> AgentRunner --> API / Playwright
  +--> SuiteExecutionEngine
@@ -87,7 +104,7 @@ TestOrchestrator
 mvn clean verify
 mvn exec:java -Dexec.args="plan <file>"
 mvn exec:java -Dexec.args="suite <file>"
-mvn exec:java -Dexec.args="data-driven <plan> <data-file> [--filter key=value] [--env <name>]"
+mvn exec:java -Dexec.args="data-driven <plan> <data-file> [--filter key=value] [--parallelism <N>] [--env <name>]"
 mvn exec:java -Dexec.args="validate plan <file>"
 mvn exec:java -Dexec.args="validate suite <file>"
 mvn exec:java -Dexec.args="interactive"
@@ -104,7 +121,8 @@ Do not store production credentials in datasets. `SecurityRedactor` masks passwo
 
 ## Version history
 
-- **v3.18.0** — CSV datasets, dataset validation and exact row filtering
+- **v3.19.0** — Parallel data-driven execution, ordered results and performance metrics
+- v3.18.0 — CSV datasets, dataset validation and exact row filtering
 - v3.17.0 — Data-driven reporting and HTML dashboard
 - v3.16.0 — Data-driven / parameterized test execution
 - v3.15.0 — Preflight validation
