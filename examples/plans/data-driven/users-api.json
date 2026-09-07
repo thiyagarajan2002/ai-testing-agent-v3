@@ -1,0 +1,15 @@
+{
+  "name": "Data Driven Users API",
+  "type": "API",
+  "baseUrl": "https://jsonplaceholder.typicode.com",
+  "steps": [
+    {
+      "action": "GET",
+      "path": "/users/${data.userId}",
+      "assertions": [
+        {"type":"status", "expected":"200"},
+        {"type":"bodyContains", "expected":"${data.expectedName}"}
+      ]
+    }
+  ]
+}
