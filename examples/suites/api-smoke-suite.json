@@ -1,0 +1,8 @@
+{
+  "name": "API Example Smoke Suite",
+  "plans": [
+    "../plans/api/get-user.json",
+    "../plans/api/create-resource.json",
+    "../plans/api/save-variable.json"
+  ]
+}
