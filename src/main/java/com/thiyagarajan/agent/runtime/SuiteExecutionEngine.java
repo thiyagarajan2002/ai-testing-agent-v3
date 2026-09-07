@@ -167,11 +167,16 @@ public final class SuiteExecutionEngine {
     }
 
     private Path resolvePlan(Path dir, String file) {
-        Path root = dir.toAbsolutePath().normalize();
-        Path resolved = root.resolve(file).normalize();
-        if (!resolved.startsWith(root))
+        Path suiteRoot = dir.toAbsolutePath().normalize();
+        Path repositoryRoot = Path.of(".").toAbsolutePath().normalize();
+        Path resolved = suiteRoot.resolve(file).normalize();
+
+        // Suite files may reference sibling repository directories, e.g.
+        // examples/suites/../plans/api/v3-plan-file.json. The old check used
+        // suiteRoot as the security boundary and incorrectly rejected that valid layout.
+        if (!resolved.startsWith(repositoryRoot))
             throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION,
-                    "Plan path escapes suite directory: " + file);
+                    "Plan path escapes repository root: " + file);
         if (!Files.isRegularFile(resolved))
             throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION,
                     "Plan file not found: " + resolved);
