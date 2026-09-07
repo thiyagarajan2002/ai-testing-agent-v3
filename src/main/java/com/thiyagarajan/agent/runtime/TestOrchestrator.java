@@ -30,12 +30,25 @@ public final class TestOrchestrator implements AutoCloseable {
         this.config = config;
         this.mapper = mapper;
         this.environments = new EnvironmentManager(mapper);
-        this.profile = environment == null || environment.isBlank() ? null : environments.load(environment, Path.of("."));
+        this.profile = loadEnvironment(environment);
         this.runner = new AgentRunner(new OllamaClient(config.ollamaUrl(), config.ollamaModel()), mapper);
         try {
             this.reports = new ReportManager();
         } catch (Exception e) {
             throw new AgentExecutionException(AgentExecutionException.Category.REPORTING, "Report manager initialization failed: " + e.getMessage(), e);
+        }
+    }
+
+    /** Loads the optional environment profile without leaking a checked exception from the constructor. */
+    private EnvironmentProfile loadEnvironment(String environment) {
+        if (environment == null || environment.isBlank()) return null;
+        try {
+            return environments.load(environment, Path.of("."));
+        } catch (AgentExecutionException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION,
+                    "Unable to load environment '" + environment + "': " + e.getMessage(), e);
         }
     }
 
