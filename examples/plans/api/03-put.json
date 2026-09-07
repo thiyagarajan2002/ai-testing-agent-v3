@@ -1,0 +1,15 @@
+{
+  "name": "API PUT Update Resource",
+  "type": "API",
+  "baseUrl": "https://httpbin.org",
+  "steps": [
+    {
+      "action": "PUT",
+      "path": "/anything/resources/1",
+      "headers": {"Content-Type": "application/json"},
+      "body": {"name":"Updated Resource","version":2},
+      "assertSpec": {"status": 200, "contains": "Updated Resource"},
+      "timeoutMs": 30000
+    }
+  ]
+}
