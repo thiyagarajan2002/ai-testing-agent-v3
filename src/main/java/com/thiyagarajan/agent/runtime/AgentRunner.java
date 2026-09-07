@@ -4,44 +4,48 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thiyagarajan.agent.ai.OllamaClient;
 import com.thiyagarajan.agent.ai.PromptManager;
 import com.thiyagarajan.agent.model.TestPlan;
-import com.thiyagarajan.agent.model.TestSuite;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 public class AgentRunner {
     private final OllamaClient llm;
     private final ObjectMapper mapper;
-    private final ApiExecutor api = new ApiExecutor();
-    private final UiExecutor ui = new UiExecutor();
 
-    public AgentRunner(OllamaClient llm, ObjectMapper mapper) { this.llm = llm; this.mapper = mapper; }
+    public AgentRunner(OllamaClient llm, ObjectMapper mapper) {
+        this.llm = llm;
+        this.mapper = mapper;
+    }
 
     public TestPlan plan(String requirement) throws Exception {
         if (requirement == null || requirement.isBlank()) throw new IllegalArgumentException("Requirement cannot be blank");
         TestPlan plan = mapper.readValue(cleanJson(llm.generate(PromptManager.planningPrompt(requirement))), TestPlan.class);
-        validate(plan); return plan;
+        validate(plan);
+        return plan;
     }
 
+    /** Creates a fresh executor per test so suite parallelism has isolated runtime state. */
     public ExecutionResult execute(TestPlan plan) {
         validate(plan);
-        return "UI".equalsIgnoreCase(plan.type) ? ui.execute(plan) : api.execute(plan);
+        return "UI".equalsIgnoreCase(plan.type)
+                ? new UiExecutor().execute(plan)
+                : new ApiExecutor().execute(plan);
     }
 
-    public List<ExecutionResult> executeSuite(TestSuite suite, Path suiteDirectory) throws Exception {
+    /** Backward-compatible sequential suite execution. */
+    public List<ExecutionResult> executeSuite(com.thiyagarajan.agent.model.TestSuite suite, java.nio.file.Path suiteDirectory) throws Exception {
         if (suite == null || suite.plans == null || suite.plans.isEmpty()) throw new IllegalArgumentException("Suite contains no plans");
         if (suiteDirectory == null) throw new IllegalArgumentException("Suite directory is required");
-        List<ExecutionResult> results = new ArrayList<>();
+        java.util.ArrayList<ExecutionResult> results = new java.util.ArrayList<>();
         for (String planFile : suite.plans) {
             if (planFile == null || planFile.isBlank()) throw new IllegalArgumentException("Suite contains a blank plan path");
-            Path resolved = suiteDirectory.resolve(planFile).normalize();
-            if (!Files.exists(resolved)) throw new IllegalArgumentException("Plan file not found: " + resolved);
-            TestPlan plan = mapper.readValue(Files.readString(resolved), TestPlan.class);
+            java.nio.file.Path resolved = suiteDirectory.resolve(planFile).normalize();
+            if (!resolved.startsWith(suiteDirectory.toAbsolutePath().normalize())) throw new IllegalArgumentException("Plan path escapes suite directory: " + planFile);
+            if (!java.nio.file.Files.exists(resolved)) throw new IllegalArgumentException("Plan file not found: " + resolved);
+            TestPlan plan = mapper.readValue(java.nio.file.Files.readString(resolved), TestPlan.class);
             ExecutionResult result = execute(plan);
             if (!result.passed()) {
-                try { analyzeFailure(plan, result); } catch (Exception e) { result.failureAnalysis("AI failure analysis unavailable: " + e.getMessage()); }
+                try { analyzeFailure(plan, result); }
+                catch (Exception e) { result.failureAnalysis("AI failure analysis unavailable: " + e.getMessage()); }
             }
             results.add(result);
         }
@@ -71,7 +75,10 @@ public class AgentRunner {
     private String cleanJson(String raw) {
         if (raw == null || raw.isBlank()) throw new IllegalArgumentException("LLM returned an empty response");
         String s = raw.trim();
-        if (s.startsWith("```")) { s = s.replaceFirst("^```(?:json)?\\s*", ""); s = s.replaceFirst("\\s*```$", ""); }
+        if (s.startsWith("```")) {
+            s = s.replaceFirst("^```(?:json)?\\s*", "");
+            s = s.replaceFirst("\\s*```$", "");
+        }
         int first = s.indexOf('{'), last = s.lastIndexOf('}');
         return first >= 0 && last > first ? s.substring(first, last + 1) : s;
     }
