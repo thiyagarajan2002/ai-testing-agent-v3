@@ -5,7 +5,6 @@ import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Paragraph;
-import com.itextpdf.layout.element.Text;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.UnitValue;
 import com.thiyagarajan.agent.runtime.ExecutionResult;
@@ -72,7 +71,7 @@ public final class SuiteReportManager {
         try (PdfWriter writer = new PdfWriter(file.toString());
              PdfDocument pdf = new PdfDocument(writer);
              Document document = new Document(pdf)) {
-            document.add(new Paragraph(new Text("AI Testing Agent Suite Report").setBold()).setFontSize(18));
+            document.add(new Paragraph("AI Testing Agent Suite Report").setFontSize(18));
             document.add(new Paragraph("Suite: " + text(suite.suiteName)));
             document.add(new Paragraph("Status: " + suite.status));
             document.add(new Paragraph("Tests: " + suite.totalTests + " | Passed: " + suite.passedTests + " | Failed: " + suite.failedTests));
