@@ -1,0 +1,15 @@
+{
+  "name": "API POST Create Resource",
+  "type": "API",
+  "baseUrl": "https://httpbin.org",
+  "steps": [
+    {
+      "action": "POST",
+      "path": "/anything/resources",
+      "headers": {"Content-Type": "application/json"},
+      "body": {"name":"AI Testing Agent","type":"example","active":true},
+      "assertSpec": {"status": 200, "contains": "AI Testing Agent"},
+      "timeoutMs": 30000
+    }
+  ]
+}
