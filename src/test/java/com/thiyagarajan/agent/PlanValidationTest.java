@@ -57,6 +57,6 @@ class PlanValidationTest {
         AgentRunner runner = new AgentRunner(null, new ObjectMapper());
         AgentExecutionException error = assertThrows(AgentExecutionException.class, () -> runner.execute(plan));
         assertEquals(AgentExecutionException.Category.PLAN_VALIDATION, error.category());
-        assertEquals("retryCount cannot be negative", error.getMessage());
+        assertEquals("Step 1: retryCount cannot be negative", error.getMessage());
     }
 }
