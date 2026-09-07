@@ -11,6 +11,7 @@ import com.thiyagarajan.agent.report.ReportManager;
 import com.thiyagarajan.agent.report.SuiteReportManager;
 import com.thiyagarajan.agent.runtime.AgentRunner;
 import com.thiyagarajan.agent.runtime.ExecutionResult;
+import com.thiyagarajan.agent.runtime.HistoryAnalyticsManager;
 import com.thiyagarajan.agent.runtime.RunHistoryManager;
 import com.thiyagarajan.agent.runtime.SuiteExecutionEngine;
 import com.thiyagarajan.agent.runtime.SuiteExecutionResult;
@@ -19,7 +20,7 @@ import java.nio.file.Path;
 import java.util.Scanner;
 
 public class Main {
-    private static final String VERSION = "3.11.0";
+    private static final String VERSION = "3.12.0";
 
     public static void main(String[] args) throws Exception {
         Config config=Config.load(); ObjectMapper mapper=new ObjectMapper(); OllamaClient llm=new OllamaClient(config.ollamaUrl(),config.ollamaModel()); AgentRunner runner=new AgentRunner(llm,mapper); ReportManager reports=new ReportManager();
@@ -38,12 +39,16 @@ public class Main {
         Path suitePath=Path.of(file).toAbsolutePath().normalize(); if(!Files.isRegularFile(suitePath))throw new IllegalArgumentException("Suite file not found: "+file); TestSuite suite=mapper.readValue(Files.readString(suitePath),TestSuite.class); Path dir=suitePath.getParent()==null?Path.of(".").toAbsolutePath():suitePath.getParent();
         SuiteExecutionEngine engine=new SuiteExecutionEngine(mapper,runner,config.parallelism(),environments,profile); SuiteExecutionResult result=engine.execute(suite,dir); Path reports=Path.of(config.reportsDir(),"suite").toAbsolutePath().normalize(); new SuiteReportManager(reports).writeAll(result);
         try {
-            RunHistoryManager.RecordedRun recorded = new RunHistoryManager(Path.of(config.reportsDir(),"history")).recordSuite(result);
+            Path history=Path.of(config.reportsDir(),"history").toAbsolutePath().normalize();
+            RunHistoryManager.RecordedRun recorded = new RunHistoryManager(history).recordSuite(result);
+            HistoryAnalyticsManager.AnalyticsReport analytics = new HistoryAnalyticsManager(history).writeReports();
             System.out.println("History run: "+recorded.runId());
             System.out.println("Regressions: "+recorded.comparison().regressions+" | Fixed: "+recorded.comparison().fixed);
-            System.out.println("History dashboard: "+Path.of(config.reportsDir(),"history","index.html").toAbsolutePath().normalize());
+            System.out.println("Flaky tests: "+analytics.flakyTests.size());
+            System.out.println("History dashboard: "+history.resolve("index.html"));
+            System.out.println("Analytics dashboard: "+history.resolve("analytics.html"));
         } catch (Exception e) {
-            System.err.println("History recording unavailable: "+e.getMessage());
+            System.err.println("History/analytics unavailable: "+e.getMessage());
         }
         System.out.println("Suite: "+suite.name); System.out.println("Environment: "+(profile==null?"default":profile.name)); System.out.println("Execution mode: parallel | threads="+Math.min(config.parallelism(),Math.max(1,result.totalTests))); System.out.println("Tests: "+result.totalTests+" | Passed: "+result.passedTests+" | Failed: "+result.failedTests); System.out.println("Duration: "+result.durationMs+" ms"); System.out.println("Suite reports: "+reports); if(!result.passed())System.exit(1);
     }
