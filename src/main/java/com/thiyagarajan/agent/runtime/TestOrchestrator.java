@@ -39,7 +39,6 @@ public final class TestOrchestrator implements AutoCloseable {
         }
     }
 
-    /** Loads the optional environment profile without leaking a checked exception from the constructor. */
     private EnvironmentProfile loadEnvironment(String environment) {
         if (environment == null || environment.isBlank()) return null;
         try {
@@ -88,11 +87,6 @@ public final class TestOrchestrator implements AutoCloseable {
         return result;
     }
 
-    /**
-     * Creates an isolated plan for failure analysis. The method intentionally does not
-     * expose Jackson's checked exception to callers, because failure analysis itself
-     * must never turn an already-recorded test failure into an orchestration failure.
-     */
     private TestPlan planForIteration(TestPlan template, Map<String, String> data) {
         try {
             TestPlan copy = mapper.readValue(mapper.writeValueAsString(template), TestPlan.class);
@@ -161,16 +155,18 @@ public final class TestOrchestrator implements AutoCloseable {
         }
         if (suite.plans == null || suite.plans.isEmpty())
             throw new AgentExecutionException(AgentExecutionException.Category.SUITE_VALIDATION, "Suite contains no plans");
-        Path dir = sp.getParent() == null ? Path.of(".").toAbsolutePath().normalize() : sp.getParent().toAbsolutePath().normalize();
+
+        Path suiteDir = sp.getParent() == null ? Path.of(".").toAbsolutePath().normalize() : sp.getParent().toAbsolutePath().normalize();
+        Path repositoryRoot = Path.of(".").toAbsolutePath().normalize();
         List<PlanPreflight> ps = new ArrayList<>();
         for (String f : suite.plans) {
             if (f == null || f.isBlank()) {
                 ps.add(new PlanPreflight(String.valueOf(f), false, List.of("Plan path is blank"), List.of()));
                 continue;
             }
-            Path r = dir.resolve(f).normalize();
-            if (!r.startsWith(dir)) {
-                ps.add(new PlanPreflight(f, false, List.of("Plan path escapes suite directory"), List.of()));
+            Path r = suiteDir.resolve(f).normalize();
+            if (!r.startsWith(repositoryRoot)) {
+                ps.add(new PlanPreflight(f, false, List.of("Plan path escapes repository root"), List.of()));
                 continue;
             }
             if (!Files.isRegularFile(r)) {
