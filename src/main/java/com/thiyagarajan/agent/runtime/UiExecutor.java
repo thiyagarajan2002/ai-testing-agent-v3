@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+/** Executes UI plans and captures evidence after every successful step and on failure. */
 public class UiExecutor {
     private final Config config;
     private final FailureArtifactManager artifacts;
@@ -46,14 +47,14 @@ public class UiExecutor {
                         case "asserttext" -> { String actual = page.locator(locator).innerText(); if (!actual.contains(value)) throw new AssertionError("Expected text '" + value + "', actual='" + actual + "'"); }
                         case "assertvalue" -> { String actual = page.locator(locator).inputValue(); if (!actual.equals(value)) throw new AssertionError("Expected value '" + value + "', actual='" + actual + "'"); }
                         case "waitfor" -> page.waitForTimeout(Long.parseLong(value));
-                        case "screenshot" -> {
-                            Path dir = Path.of(config.reportsDir(), config.screenshotsDir());
-                            Files.createDirectories(dir);
-                            page.screenshot(new Page.ScreenshotOptions().setPath(dir.resolve(FailureArtifactManager.safe(value, "screenshot.png"))));
-                        }
+                        case "screenshot" -> { /* automatic evidence capture below makes this explicit action optional */ }
                         default -> throw new IllegalArgumentException("Unsupported UI action: " + step.action);
                     }
-                    result.steps.add(new ExecutionResult.StepResult(step.action, true, "OK", System.currentTimeMillis() - start));
+                    Path screenshot = captureStep(page, plan.name, index, step.action);
+                    String details = "OK; screenshot=" + (screenshot == null ? "unavailable" : screenshot);
+                    result.steps.add(new ExecutionResult.StepResult(step.action, true, details,
+                            System.currentTimeMillis() - start,
+                            screenshot == null ? List.of() : List.of(screenshot.toString())));
                 } catch (Exception e) {
                     result.passed = false;
                     Path screenshot = captureFailure(page, plan.name, index);
@@ -76,13 +77,26 @@ public class UiExecutor {
         return base.replaceAll("/$", "") + "/" + value.replaceFirst("^/", "");
     }
 
+    private Path captureStep(Page page, String testName, int index, String action) {
+        try {
+            Path dir = Path.of(config.reportsDir(), config.screenshotsDir(), "ui", FailureArtifactManager.safe(testName, "test"));
+            Files.createDirectories(dir);
+            String actionName = FailureArtifactManager.safe(action, "step");
+            Path file = dir.resolve(String.format("%03d-%s.png", index + 1, actionName));
+            page.screenshot(new Page.ScreenshotOptions().setPath(file).setFullPage(true));
+            return file;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     private Path captureFailure(Page page, String testName, int index) {
         try {
-            Path dir = Path.of(config.reportsDir(), config.screenshotsDir());
+            Path dir = Path.of(config.reportsDir(), config.screenshotsDir(), "ui", "failures");
             Files.createDirectories(dir);
             String name = FailureArtifactManager.safe(testName, "test") + "-step-" + (index + 1) + "-failure.png";
             Path file = dir.resolve(name);
-            page.screenshot(new Page.ScreenshotOptions().setPath(file));
+            page.screenshot(new Page.ScreenshotOptions().setPath(file).setFullPage(true));
             return file;
         } catch (Exception ignored) {
             return null;
