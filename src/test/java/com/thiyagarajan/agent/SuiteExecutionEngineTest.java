@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thiyagarajan.agent.ai.OllamaClient;
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestSuite;
+import com.thiyagarajan.agent.runtime.AgentExecutionException;
 import com.thiyagarajan.agent.runtime.AgentRunner;
 import com.thiyagarajan.agent.runtime.ExecutionResult;
 import com.thiyagarajan.agent.runtime.SuiteExecutionEngine;
@@ -62,7 +63,10 @@ class SuiteExecutionEngineTest {
         suite.plans.add("../" + outside.getFileName());
 
         AgentRunner runner = new AgentRunner((OllamaClient) null, new ObjectMapper());
-        assertThrows(IllegalArgumentException.class, () -> new SuiteExecutionEngine(new ObjectMapper(), runner, 2).execute(suite, dir));
+        AgentExecutionException error = assertThrows(AgentExecutionException.class,
+                () -> new SuiteExecutionEngine(new ObjectMapper(), runner, 2).execute(suite, dir));
+        assertEquals(AgentExecutionException.Category.SUITE_VALIDATION, error.category());
+        assertTrue(error.getMessage().contains("escapes suite directory"));
     }
 
     private void writePlan(Path path, String name) throws Exception {
