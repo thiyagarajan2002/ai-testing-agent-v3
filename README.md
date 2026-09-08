@@ -1,13 +1,27 @@
-# AI Testing Agent — v3.22.0
+# AI Testing Agent — v3.23.0
 
 AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, retries, artifacts, reporting, suites, history/analytics, security redaction, preflight validation and data-driven execution.
+
+## v3.23.0 — Phase 2 Reporting Standardization & Integrity
+
+Phase 2 strengthens the unified reporting package established in v3.21/v3.22:
+
+- **Single report package contract:** every execution report is expected to contain exactly `report.html`, `report.csv` and `report.pdf`.
+- **Common execution source:** HTML, CSV and PDF continue to derive their core status, step, duration, detail, artifact and failure-analysis data from the same `ExecutionResult`.
+- **HTML dashboard:** responsive interactive dashboard with KPI metrics, outcome visualization, latency profile, search/filter/sort, expandable step details, artifacts, theme toggle and print support.
+- **CSV export:** UTF-8 BOM, machine-readable execution rows and summary metrics for downstream processing.
+- **PDF export:** professional color-coded printable report with execution summary, performance profile, step results, details/artifacts and failure analysis.
+- **Package integrity validation:** `ReportIntegrityValidator` verifies the exact three-file package, non-empty outputs, HTML package markers, CSV BOM/summary and PDF signature.
+- **Regression coverage:** report-package validation covers complete, incomplete, unexpected-file and invalid-PDF scenarios.
+
+The validator provides a deterministic quality gate for report artifacts and is intended to prevent incomplete report bundles from being treated as successful output.
 
 ## v3.22.0 — Phase 1 Stability & Security
 
 Phase 1 hardens the execution foundation before new feature work:
 
 - **Build stability:** Java 21/Maven compilation and unit-test gates remain mandatory in CI.
-- **Configuration validation:** `PARALLELISM` is now restricted to 1–64, matching the supported execution contract.
+- **Configuration validation:** `PARALLELISM` is restricted to 1–64.
 - **Standardized errors:** runtime failures use `AgentExecutionException` categories, and invalid/null categories are rejected.
 - **CLI lifecycle safety:** execution exceptions are captured inside the durable-log scope, stack traces are preserved in the log, and the process exits only after log resources are closed.
 - **Secure terminal logging:** stdout/stderr remain visible while persisted terminal logs redact credentials and sensitive values.
@@ -90,26 +104,6 @@ The screenshot path is attached to the step result. The existing explicit `scree
 
 The application tees stdout/stderr: output remains visible in the terminal and is simultaneously persisted to a timestamped log. Persisted logs are redacted for known credential patterns and sensitive environment values.
 
-API-oriented CLI commands:
-
-```text
-reports/api/logs/terminal-<timestamp>-<command>.log
-```
-
-Interactive runs:
-
-```text
-reports/ui/logs/terminal-<timestamp>-interactive.log
-```
-
-Other commands:
-
-```text
-reports/terminal/logs/
-```
-
-The terminal log includes the command, application output/errors and final exit code.
-
 ## Unified execution reports
 
 Each execution report bundle contains exactly these three report formats:
@@ -177,6 +171,7 @@ Do not store production credentials in plans or datasets. Sensitive execution di
 
 ## Version history
 
+- **v3.23.0** — Phase 2 reporting standardization, color-coded HTML/CSV/PDF contract and report package integrity validation
 - **v3.22.0** — Phase 1 stability, configuration bounds, standardized error handling, secure UTF-8 terminal logging and regression coverage
 - v3.21.0 — comprehensive API/UI examples, automatic UI screenshots, API execution logs, terminal log persistence and unified HTML/CSV/PDF execution reports
 - v3.20.0 — repository organization and engineering standards
