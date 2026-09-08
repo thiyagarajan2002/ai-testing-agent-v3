@@ -1,6 +1,19 @@
-# AI Testing Agent — v3.21.0
+# AI Testing Agent — v3.22.0
 
 AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, retries, artifacts, reporting, suites, history/analytics, security redaction, preflight validation and data-driven execution.
+
+## v3.22.0 — Phase 1 Stability & Security
+
+Phase 1 hardens the execution foundation before new feature work:
+
+- **Build stability:** Java 21/Maven compilation and unit-test gates remain mandatory in CI.
+- **Configuration validation:** `PARALLELISM` is now restricted to 1–64, matching the supported execution contract.
+- **Standardized errors:** runtime failures use `AgentExecutionException` categories, and invalid/null categories are rejected.
+- **CLI lifecycle safety:** execution exceptions are captured inside the durable-log scope, stack traces are preserved in the log, and the process exits only after log resources are closed.
+- **Secure terminal logging:** stdout/stderr remain visible while persisted terminal logs redact credentials and sensitive values.
+- **UTF-8-safe logging:** redaction buffers complete log lines so Unicode output is preserved correctly.
+- **Regression coverage:** configuration bounds, persisted-log redaction, UTF-8 output and execution-result serialization are covered by tests.
+- **CI validation:** repository JSON fixtures accept either objects or arrays under `examples/data/`, while executable plan/suite JSON remains object-only.
 
 ## v3.21.0 — Examples, UI Evidence & Durable Logs
 
@@ -75,7 +88,7 @@ The screenshot path is attached to the step result. The existing explicit `scree
 
 ### Terminal run logs
 
-The application now tees stdout/stderr: output remains visible in the terminal and is simultaneously persisted to a timestamped log.
+The application tees stdout/stderr: output remains visible in the terminal and is simultaneously persisted to a timestamped log. Persisted logs are redacted for known credential patterns and sensitive environment values.
 
 API-oriented CLI commands:
 
@@ -160,11 +173,12 @@ ai-testing-agent-v3/
 
 ## Security
 
-Do not store production credentials in plans or datasets. Sensitive execution diagnostics, API logs and AI failure-analysis input are redacted before persistence.
+Do not store production credentials in plans or datasets. Sensitive execution diagnostics, API logs, terminal logs and AI failure-analysis input are redacted before persistence.
 
 ## Version history
 
-- **v3.21.0** — comprehensive API/UI examples, automatic UI screenshots, API execution logs, terminal log persistence and unified HTML/CSV/PDF execution reports
+- **v3.22.0** — Phase 1 stability, configuration bounds, standardized error handling, secure UTF-8 terminal logging and regression coverage
+- v3.21.0 — comprehensive API/UI examples, automatic UI screenshots, API execution logs, terminal log persistence and unified HTML/CSV/PDF execution reports
 - v3.20.0 — repository organization and engineering standards
 - v3.19.0 — parallel data-driven execution, ordered results and performance metrics
 - v3.18.0 — CSV datasets, dataset validation and exact row filtering
