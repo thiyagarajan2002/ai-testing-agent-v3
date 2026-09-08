@@ -123,9 +123,11 @@ public final class PdfReportWriter {
                 table.addCell(cell(text(step.action), ColorConstants.WHITE, TextAlignment.LEFT));
                 Color statusColor = step.passed ? GREEN : RED;
                 Color statusBg = step.passed ? GREEN_LIGHT : RED_LIGHT;
-                table.addCell(cell(step.passed ? "PASS" : "FAIL", statusBg, TextAlignment.CENTER).setFontColor(statusColor).setBold());
+                table.addCell(cell(step.passed ? "PASS" : "FAIL", statusBg, TextAlignment.CENTER)
+                        .setFontColor(statusColor));
                 Color durationColor = step.durationMs >= 1000 ? AMBER : NAVY;
-                table.addCell(cell(step.durationMs + " ms", ColorConstants.WHITE, TextAlignment.RIGHT).setFontColor(durationColor).setBold());
+                table.addCell(cell(step.durationMs + " ms", ColorConstants.WHITE, TextAlignment.RIGHT)
+                        .setFontColor(durationColor));
 
                 StringBuilder detail = new StringBuilder(text(step.details));
                 if (step.artifacts != null && !step.artifacts.isEmpty()) {
