@@ -30,6 +30,9 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Validate CI scripts
+        run: bash -n scripts/ci/run-examples.sh
+
       - name: Compile project before Playwright CLI
         run: mvn -B --no-transfer-progress clean -DskipTests compile
 
