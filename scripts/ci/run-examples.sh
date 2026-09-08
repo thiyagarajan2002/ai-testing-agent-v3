@@ -29,12 +29,24 @@ echo "Validating all JSON examples recursively..."
 python3 - <<'PY'
 import json
 from pathlib import Path
+
 for path in sorted(Path("examples").rglob("*.json")):
     with path.open(encoding="utf-8") as fh:
         data = json.load(fh)
-    if not isinstance(data, dict):
+
+    # Data-driven fixtures may legitimately be either an object or an array.
+    # Plans, suites, environments, and legacy envelopes must remain objects.
+    if "data" in path.parts:
+        if not isinstance(data, (dict, list)):
+            raise SystemExit(
+                f"Dataset JSON must contain an object or array: {path}"
+            )
+    elif not isinstance(data, dict):
         raise SystemExit(f"JSON example must contain an object: {path}")
+
     print(f"OK: {path}")
+
+print("All JSON examples validated successfully.")
 PY
 
 # v3 direct plan.
