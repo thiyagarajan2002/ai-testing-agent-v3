@@ -2,13 +2,13 @@
 
 ## Current version
 
-**3.21.0 — Comprehensive examples, UI evidence and durable execution logs**
+**3.21.0 — Comprehensive examples, UI evidence, durable execution logs and unified reports**
 
-AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama planning with REST Assured API execution, Playwright UI execution, JSON/CSV data-driven testing, environment profiles, assertions, retries, failure artifacts, HTML/JSON/CSV/PDF reporting, suite execution, history/analytics, security redaction, CI automation, and preflight validation.
+AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama planning with REST Assured API execution, Playwright UI execution, JSON/CSV data-driven testing, environment profiles, assertions, retries, failure artifacts, HTML/CSV/PDF reporting, suite execution, history/analytics, security redaction, CI automation, and preflight validation.
 
 ## v3.21.0 example library
 
-The `examples/` directory now provides multiple scenarios instead of a single demonstration plan.
+The `examples/` directory provides multiple API, UI, suite and data-driven scenarios.
 
 ### API plans
 
@@ -53,8 +53,6 @@ examples/suites/
 ├── ui-regression-suite.json
 └── full-regression-suite.json
 ```
-
-The regression suites demonstrate multi-plan execution and the full suite demonstrates combining API and UI scenarios.
 
 ### Data-driven example
 
@@ -137,7 +135,7 @@ reports/screenshots/ui/
     └── 005-assertvisible.png
 ```
 
-This removes the need to add an explicit screenshot action after every step. The explicit `screenshot` action remains supported for custom evidence points. Screenshot paths are attached to step results so reports can display the corresponding evidence.
+The explicit `screenshot` action remains supported for custom evidence points. Screenshot paths are attached to step results so reports can display the corresponding evidence.
 
 ## Terminal run logging
 
@@ -162,6 +160,79 @@ reports/terminal/logs/
 ```
 
 Each terminal log contains the command, application stdout/stderr and final exit code. The original console streams are restored when the run finishes.
+
+## Unified reporting
+
+`ReportManager.writeAll(ExecutionResult)` is the single execution-report entry point. It normalizes the result once and generates exactly three report files from the same execution data:
+
+```text
+reports/<run>/
+├── report.html
+├── report.csv
+└── report.pdf
+```
+
+Runtime logs and screenshots are evidence, not extra report formats. They remain in their dedicated folders and are referenced by step artifacts when available.
+
+### `ReportManager.writeAll(ExecutionResult)`
+
+1. Validates and normalizes the supplied `ExecutionResult`.
+2. Captures one generated timestamp shared by all report formats.
+3. Calls the HTML writer.
+4. Calls the CSV writer.
+5. Calls `PdfReportWriter.write(...)`.
+
+The method no longer writes `execution.log` as part of the report bundle.
+
+### HTML report
+
+The HTML report includes:
+
+- execution/test name and overall PASS/FAIL status
+- total, passed and failed step KPI cards
+- pass rate, total duration and average duration
+- search across execution rows
+- PASS/FAIL filtering
+- slow-step filtering using a calculated threshold
+- sortable action/status/duration columns
+- expandable step details containing input/output text
+- artifact links for API logs, UI screenshots or other evidence
+- failure analysis
+- light/dark theme toggle
+- print support
+- direct links to `report.csv` and `report.pdf`
+
+### CSV report
+
+The CSV report uses UTF-8 with BOM and CSV-safe quoting. Each execution row contains:
+
+```text
+test,action,status,duration_ms,details,artifacts
+```
+
+A summary footer records generated time, overall status, total steps, passed/failed totals, pass rate, total/average/min/max duration and failure analysis.
+
+### PDF report
+
+`PdfReportWriter` creates the printable counterpart of the HTML/CSV reports. It contains:
+
+- generated timestamp
+- test name and overall status
+- total steps and passed/failed totals
+- pass rate
+- total, average, minimum and maximum duration
+- step-by-step action/status/duration/details
+- input/output text carried in step details
+- artifact references
+- failure analysis
+
+### Reporting consistency rule
+
+HTML, CSV and PDF must always be produced from the same `ExecutionResult`. New reporting fields should be added to the shared execution model first, then rendered consistently in all supported formats.
+
+### Regression test
+
+`ReportManagerTest.writeAllGeneratesOnlyHtmlCsvAndPdfReports()` verifies that a report run creates exactly `report.html`, `report.csv` and `report.pdf`, that the PDF is non-empty, that HTML includes the expected dashboard/detail content, and that CSV includes its summary and failure analysis.
 
 ## Technology stack
 
@@ -223,7 +294,7 @@ ai-testing-agent-v3/
 
 ## Reporting and history
 
-JSON, CSV, HTML and PDF reporting is supported. Data-driven reporting records iteration results, execution mode, workers, duration and estimated speedup. History and analytics provide run comparison, pass/fail totals, flaky-test detection and slow-test analysis.
+HTML, CSV and PDF are the supported execution-report formats. Data-driven reporting records iteration results, execution mode, workers, duration and estimated speedup. History/analytics remain separate runtime features for run comparison, pass/fail totals, flaky-test detection and slow-test analysis.
 
 ## CI/CD
 
