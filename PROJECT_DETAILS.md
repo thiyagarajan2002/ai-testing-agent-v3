@@ -2,100 +2,66 @@
 
 ## Current version
 
-**3.24.0 — Phase 3 API Testing Enhancement**
+**3.25.0 — Phase 4 UI Testing Enhancement**
 
 AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama planning with REST Assured API execution, Playwright UI execution, JSON/CSV data-driven testing, environment profiles, assertions, retries, failure artifacts, HTML/CSV/PDF reporting, suite execution, history/analytics, security redaction, CI automation and preflight validation.
 
-## v3.24.0 API execution
+## v3.25.0 UI execution
 
-`ApiExecutor` is the API runtime entry point. It now separates request construction, authentication, method dispatch, assertions, variable extraction, retries and failure evidence while retaining the existing `ExecutionResult` contract.
+`UiExecutor` is the Playwright UI runtime entry point. Phase 4 hardens browser/context lifecycle, navigation waiting, locator actions, assertions, explicit state waits and evidence handling while retaining the existing `ExecutionResult` contract.
 
-### Supported HTTP methods
+### Browser lifecycle
 
-`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, and `OPTIONS` are supported. Unsupported methods fail with an explicit diagnostic rather than silently falling back to another method.
+Each UI execution creates a Playwright browser, an isolated browser context and a page. The context and browser are closed in `finally` blocks so resources are released even when a UI step fails.
 
-### Request construction
+### Navigation and waits
 
-`TestStep` now supports:
+Navigation waits for `DOMContentLoaded` instead of relying on an arbitrary sleep. Locator-based actions use Playwright's built-in action waiting. Explicit state waits are available through `waitforvisible` and `waitforhidden`. The existing `waitfor` timed wait remains supported for backward compatibility, but event/state waits are preferred.
 
-- `path` — relative or absolute HTTP(S) URL
-- `query` — URL-encoded query parameters with variable substitution
-- `headers` — substituted request headers
-- `body` — raw request body with variable substitution
-- `contentType` — explicit Content-Type; JSON is the default when a body is supplied without a type
-- `form` — URL-encoded form fields
-- `timeoutMs` — per-step timeout
+### Supported UI actions
 
-Variables use `${name}` syntax and are resolved from plan variables or values saved from earlier responses.
+`navigate`, `click`, `fill`, `press`, `selectOption`, `hover`, `check`, `uncheck`, `assertVisible`, `assertText`, `assertValue`, `assertTitle`, `assertUrl`, `waitFor`, `waitForVisible`, `waitForHidden`, and `screenshot` are supported.
 
-### Authentication
+Locator-based actions fail with a clear diagnostic when the locator is missing. Step-specific `timeoutMs` overrides the configured default timeout.
 
-`TestStep.auth` supports:
+### UI assertions
 
-| Type | Fields | Behavior |
-|---|---|---|
-| `none` | — | No authentication added |
-| `bearer` | `token` | Adds OAuth2/Bearer authentication |
-| `basic` | `username`, `password` | Adds preemptive HTTP Basic authentication |
-| `apiKeyHeader` | `key`, `value` | Sends the API key as a request header |
-| `apiKeyQuery` | `key`, `value` | Sends the API key as a query parameter |
+- `assertvisible` verifies the target is visible.
+- `asserttext` verifies the target text contains the expected value.
+- `assertvalue` verifies an input value exactly.
+- `asserttitle` verifies the page title contains the expected value.
+- `asserturl` verifies the current URL contains the expected value.
 
-Authentication values are not intentionally included in the request log by the executor. Existing persisted-log redaction remains the final safety layer for sensitive diagnostics.
+### UI evidence
+
+After every successful step, a full-page screenshot is attempted and attached to the corresponding `ExecutionResult.StepResult`. Failed steps capture a failure screenshot and failure metadata. Screenshot failures are deliberately non-fatal so evidence problems do not hide the original test failure.
+
+### UI diagnostics and security
+
+Exception text stored in execution results is passed through `SecurityRedactor`. Failure metadata is created through the existing `FailureArtifactManager`, preserving the project's persisted-evidence security model.
 
 Example:
 
 ```json
 {
-  "action": "GET",
-  "path": "/users/1",
-  "auth": { "type": "bearer", "token": "${API_TOKEN}" },
-  "assertions": [
-    { "type": "status", "expected": "200" },
-    { "type": "jsonPathExists", "path": "id", "expected": "true" }
+  "name": "Login smoke",
+  "type": "UI",
+  "baseUrl": "https://example.com",
+  "steps": [
+    { "action": "navigate", "value": "/login" },
+    { "action": "waitforvisible", "locator": "#username" },
+    { "action": "fill", "locator": "#username", "value": "demo" },
+    { "action": "fill", "locator": "#password", "value": "${PASSWORD}" },
+    { "action": "click", "locator": "button[type=submit]" },
+    { "action": "assertvisible", "locator": ".dashboard" },
+    { "action": "asserttitle", "value": "Dashboard" }
   ]
 }
 ```
 
-### Assertions
+## v3.24.0 API execution
 
-`ApiAssertionEngine` supports legacy `assertSpec` plus typed `assertions`.
-
-Typed assertion types:
-
-- `status`
-- `bodyContains`
-- `bodyNotContains`
-- `bodyRegex`
-- `headerEquals`
-- `jsonPathExists`
-- `jsonPathEquals`
-- `jsonPathContains`
-- `jsonPathRegex`
-- `xmlPathExists`
-- `xmlPathEquals`
-- `responseTimeMs`
-
-Failures are returned as diagnostics and are included in the step result and failure artifact when retries are exhausted.
-
-### Response variable extraction
-
-`save` maps a variable name to a JSONPath. Successful extraction stores the value in the executor variable context for subsequent steps.
-
-```json
-"save": {
-  "userId": "id"
-}
-```
-
-A missing extraction value is treated as an execution failure rather than silently saving `null`.
-
-### Retry behavior
-
-`retryCount` overrides the configured global retry count for an individual step. The first request is attempt 1; `retryCount: 2` therefore allows up to 3 total attempts. Assertion failures and request exceptions both participate in the retry loop.
-
-### API evidence
-
-API request/response logs remain under `reports/api/logs/`. Failure artifacts contain the request URL/body, diagnostic details and bounded response information. Existing redaction is applied before persisted sensitive diagnostics are consumed by reporting/history/AI analysis.
+`ApiExecutor` supports GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS, substituted path/query/header values, JSON/text bodies, content types, URL-encoded forms, bearer/basic/API-key authentication, status/body/header/JSONPath/XMLPath/response-time assertions, response-variable extraction and retries.
 
 ## v3.23.0 reporting integrity
 
@@ -120,9 +86,9 @@ reports/<run>/
 
 ## Examples
 
-API plans are under `examples/plans/api/` and include GET, POST, PUT, DELETE, query/header, negative-status, save-variable and retry scenarios. Phase 3 adds authentication, form and assertion patterns to the documented API model.
+API plans are under `examples/plans/api/` and include GET, POST, PUT, DELETE, query/header, negative-status, save-variable, authentication and assertion scenarios.
 
-UI plans are under `examples/plans/ui/` and use Playwright with automatic screenshots after successful and failed steps.
+UI plans are under `examples/plans/ui/` and use Playwright with automatic screenshots after successful and failed steps. New UI plans should prefer `waitforvisible`/`waitforhidden` over fixed `waitfor` sleeps.
 
 Suites are under `examples/suites/` and data-driven plans under `examples/plans/data-driven/`.
 
@@ -131,9 +97,16 @@ Suites are under `examples/suites/` and data-driven plans under `examples/plans/
 ```bash
 mvn clean verify
 mvn exec:java -Dexec.args="plan examples/plans/api/get-user.json"
+mvn exec:java -Dexec.args="plan examples/plans/ui/login-flow.json"
 mvn exec:java -Dexec.args="suite examples/suites/api-regression-suite.json"
 mvn exec:java -Dexec.args="data-driven examples/plans/data-driven/users-api.json examples/data/json/users.json --parallelism 3"
-mvn exec:java -Dexec.args="validate plan examples/plans/api/get-user.json"
+mvn exec:java -Dexec.args="validate plan examples/plans/ui/login-flow.json"
+```
+
+Install Chromium when required:
+
+```bash
+mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
 ```
 
 ## Core classes
@@ -144,7 +117,7 @@ mvn exec:java -Dexec.args="validate plan examples/plans/api/get-user.json"
 - `TestStep` — API/UI action model, request data, authentication, retries and assertions.
 - `ApiExecutor` — API request execution, retries, variable extraction and evidence.
 - `ApiAssertionEngine` — API status/body/header/JSON/XML/performance assertions.
-- `UiExecutor` — Playwright execution and automatic screenshot evidence.
+- `UiExecutor` — Playwright browser/context/page execution, waits, actions, assertions and screenshots.
 - `SuiteExecutionEngine` — suite loading, validation, parallel workers and aggregation.
 - `DataDrivenRunner` — dataset-driven execution and metrics.
 - `ReportManager` — unified HTML/CSV/PDF report generation.
@@ -176,4 +149,4 @@ GitHub Actions performs Java 21 setup, Maven verification, example validation/ex
 
 ## Release documentation rule
 
-Every release updates `pom.xml`, CLI/version metadata, `README.md`, `PROJECT_DETAILS.md`, `docs/releases/CHANGELOG.md`, relevant tests and examples/documentation. Phase 3 specifically added API model/runtime changes plus `ApiExecutorPhase3Test` regression coverage.
+Every release updates `pom.xml`, CLI/version metadata, `README.md`, `PROJECT_DETAILS.md`, `docs/releases/CHANGELOG.md`, relevant tests and examples/documentation.
