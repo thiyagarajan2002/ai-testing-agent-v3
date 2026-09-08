@@ -18,15 +18,22 @@ public class AgentExecutionException extends RuntimeException {
 
     public AgentExecutionException(Category category, String message) {
         super(message);
-        this.category = category;
+        this.category = requireCategory(category);
     }
 
     public AgentExecutionException(Category category, String message, Throwable cause) {
         super(message, cause);
-        this.category = category;
+        this.category = requireCategory(category);
     }
 
     public Category category() {
+        return category;
+    }
+
+    private static Category requireCategory(Category category) {
+        if (category == null) {
+            throw new IllegalArgumentException("Exception category cannot be null");
+        }
         return category;
     }
 }
