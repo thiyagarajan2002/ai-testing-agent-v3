@@ -1,8 +1,11 @@
 package com.thiyagarajan.agent.report;
 
 import com.itextpdf.kernel.colors.ColorConstants;
+import com.itextpdf.kernel.font.PdfFont;
+import com.itextpdf.kernel.font.PdfFontFactory;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.io.font.constants.StandardFonts;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Cell;
 import com.itextpdf.layout.element.Paragraph;
@@ -18,6 +21,15 @@ import java.util.Locale;
 
 /** Generates the printable PDF counterpart of the HTML/CSV execution report. */
 public final class PdfReportWriter {
+    private static final PdfFont BOLD_FONT;
+
+    static {
+        try {
+            BOLD_FONT = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD);
+        } catch (Exception e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     public void write(ExecutionResult result, Path file) throws Exception {
         write(result, file, "");
@@ -42,14 +54,14 @@ public final class PdfReportWriter {
              PdfDocument pdf = new PdfDocument(writer);
              Document document = new Document(pdf)) {
 
-            document.add(new Paragraph("AI Testing Agent Execution Report")
-                    .setFontSize(20).setBold().setTextAlignment(TextAlignment.CENTER));
+            document.add(bold("AI Testing Agent Execution Report")
+                    .setFontSize(20).setTextAlignment(TextAlignment.CENTER));
             if (generatedAt != null && !generatedAt.isBlank()) {
                 document.add(new Paragraph("Generated: " + generatedAt)
                         .setFontSize(9).setTextAlignment(TextAlignment.CENTER));
             }
 
-            document.add(new Paragraph("Execution Summary").setFontSize(14).setBold());
+            document.add(bold("Execution Summary").setFontSize(14));
             Table summary = new Table(UnitValue.createPercentArray(new float[]{2, 3})).useAllAvailableWidth();
             addSummaryRow(summary, "Test", text(result.testName));
             addSummaryRow(summary, "Overall Status", result.passed ? "PASS" : "FAIL");
@@ -61,7 +73,7 @@ public final class PdfReportWriter {
             addSummaryRow(summary, "Min / Max Duration", minDuration + " ms / " + maxDuration + " ms");
             document.add(summary);
 
-            document.add(new Paragraph("Step Results").setFontSize(14).setBold().setMarginTop(14));
+            document.add(bold("Step Results").setFontSize(14).setMarginTop(14));
             Table table = new Table(UnitValue.createPercentArray(new float[]{2.2f, 1, 1.2f, 4.6f})).useAllAvailableWidth();
             addHeader(table, "Action");
             addHeader(table, "Status");
@@ -70,7 +82,7 @@ public final class PdfReportWriter {
 
             for (ExecutionResult.StepResult step : steps) {
                 table.addCell(new Cell().add(new Paragraph(text(step.action))));
-                Paragraph status = new Paragraph(step.passed ? "PASS" : "FAIL").setBold();
+                Paragraph status = bold(step.passed ? "PASS" : "FAIL");
                 status.setFontColor(step.passed ? ColorConstants.GREEN : ColorConstants.RED);
                 table.addCell(new Cell().add(status));
                 table.addCell(new Cell().add(new Paragraph(String.valueOf(step.durationMs))));
@@ -86,23 +98,27 @@ public final class PdfReportWriter {
             }
             document.add(table);
 
-            document.add(new Paragraph("Failure Analysis").setFontSize(14).setBold().setMarginTop(14));
+            document.add(bold("Failure Analysis").setFontSize(14).setMarginTop(14));
             String failure = text(result.failureAnalysis);
             document.add(new Paragraph(failure.isBlank() ? "No failure analysis recorded." : failure));
 
-            document.add(new Paragraph("Report Formats").setFontSize(14).setBold().setMarginTop(14));
+            document.add(bold("Report Formats").setFontSize(14).setMarginTop(14));
             document.add(new Paragraph("This execution is published consistently as report.html, report.csv and report.pdf. "
                     + "Runtime logs and UI screenshots remain separate execution evidence and may be referenced as step artifacts."));
         }
     }
 
     private void addSummaryRow(Table table, String key, String value) {
-        table.addCell(new Cell().add(new Paragraph(key).setBold()));
+        table.addCell(new Cell().add(bold(key)));
         table.addCell(new Cell().add(new Paragraph(value)));
     }
 
     private void addHeader(Table table, String value) {
-        table.addHeaderCell(new Cell().add(new Paragraph(value).setBold()));
+        table.addHeaderCell(new Cell().add(bold(value)));
+    }
+
+    private Paragraph bold(String value) {
+        return new Paragraph(value).setFont(BOLD_FONT);
     }
 
     private String text(String value) {
