@@ -51,7 +51,7 @@ class ReportManagerTest {
         assertTrue(Files.size(tempDir.resolve("report.pdf")) > 0);
 
         String html = Files.readString(tempDir.resolve("report.html"), StandardCharsets.UTF_8);
-        assertTrue(html.contains("AI Testing Agent Execution Report"));
+        assertTrue(html.contains("AI Testing Agent — Execution Report"));
         assertTrue(html.contains("Pass rate"));
         assertTrue(html.contains("report.csv"));
         assertTrue(html.contains("report.pdf"));
