@@ -2,6 +2,22 @@
 
 All notable project changes are documented here at release level. The complete implementation history and method-level details remain in `PROJECT_DETAILS.md`.
 
+## 3.22.0
+
+- Hardened Phase 1 execution stability before feature expansion.
+- Added a hard `PARALLELISM` safety limit of 64 and validated CLI overrides against the same limit.
+- Standardized runtime error categories through `AgentExecutionException` and rejected null categories.
+- Fixed CLI error handling so execution exceptions are captured while durable terminal logging is still active.
+- Deferred process termination until after the `RunLogManager` try-with-resources scope closes.
+- Preserved full exception stack traces in durable terminal logs for infrastructure and execution failures.
+- Added secure redaction to persisted stdout/stderr without changing what is displayed live in the terminal.
+- Made terminal-log redaction UTF-8 safe for non-ASCII output.
+- Added regression coverage for maximum/invalid parallelism and terminal-log secret redaction/Unicode preservation.
+- Added CI shell syntax validation before Maven/Playwright execution.
+- Kept repository JSON validation compatible with array-based data fixtures while requiring executable examples to remain JSON objects.
+- Bumped the application/Maven version to 3.22.0.
+- Updated README and release documentation for Phase 1 behavior.
+
 ## 3.21.0
 
 - Expanded `examples/` into a multi-scenario API, UI, suite and data-driven example catalog.
