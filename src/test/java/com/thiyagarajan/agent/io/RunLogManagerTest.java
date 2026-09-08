@@ -20,4 +20,20 @@ class RunLogManagerTest {
         assertTrue(content.contains("run-log-test-output"));
         assertTrue(content.contains("AI Testing Agent run finished"));
     }
+
+    @Test
+    void redactsSecretsFromPersistedTerminalLog() throws Exception {
+        Path reports = Files.createTempDirectory("run-log-secret-");
+        try (RunLogManager ignored = RunLogManager.start(reports.toString(), "api", "plan")) {
+            System.out.println("Authorization: Bearer super-secret-token");
+            System.out.println("password=top-secret-password");
+            System.out.println("Unicode: தமிழ் ✓");
+        }
+        Path log = Files.walk(reports).filter(Files::isRegularFile).findFirst().orElseThrow();
+        String content = Files.readString(log);
+        assertFalse(content.contains("super-secret-token"));
+        assertFalse(content.contains("top-secret-password"));
+        assertTrue(content.contains("***REDACTED***"));
+        assertTrue(content.contains("தமிழ் ✓"));
+    }
 }
