@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-/** Evaluates legacy and v3.9 assertion definitions and returns diagnostic failures. */
+/** Evaluates legacy and typed API assertions and returns diagnostic failures. */
 public final class ApiAssertionEngine {
     public List<String> validate(Response response, TestStep step, long durationMs, java.util.function.Function<String, String> substitute) {
         List<String> failures = new ArrayList<>();
@@ -77,6 +77,16 @@ public final class ApiAssertionEngine {
                 case "jsonpathregex" -> {
                     Object actual = response.jsonPath().get(a.path);
                     if (actual == null || !Pattern.compile(expected).matcher(String.valueOf(actual)).find()) failures.add("jsonPathRegex '" + a.path + "' did not match='" + expected + "', actual='" + actual + "'");
+                }
+                case "xmlpathexists" -> {
+                    Object actual = response.xmlPath().get(a.path);
+                    boolean exists = actual != null;
+                    boolean wanted = expected.isBlank() || Boolean.parseBoolean(expected);
+                    if (exists != wanted) failures.add("xmlPathExists '" + a.path + "' expected=" + wanted + ", actual=" + exists);
+                }
+                case "xmlpathequals" -> {
+                    Object actual = response.xmlPath().get(a.path);
+                    if (actual == null || !String.valueOf(actual).equals(expected)) failures.add("xmlPathEquals '" + a.path + "' expected='" + expected + "', actual='" + actual + "'");
                 }
                 case "responsetimems" -> {
                     long limit = Long.parseLong(expected);
