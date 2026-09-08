@@ -1,5 +1,7 @@
 package com.thiyagarajan.agent.io;
 
+import com.thiyagarajan.agent.runtime.SecurityRedactor;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -11,14 +13,16 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-/** Creates durable terminal logs while preserving live terminal output. */
+/** Creates durable, redacted terminal logs while preserving live terminal output. */
 public final class RunLogManager implements AutoCloseable {
     private final Path logFile;
     private final PrintStream originalOut;
     private final PrintStream originalErr;
     private final PrintStream filePrint;
+    private final RedactingLineOutputStream fileOutput;
     private final PrintStream teeOut;
     private final PrintStream teeErr;
+    private boolean closed;
 
     private RunLogManager(Path logFile, PrintStream originalOut, PrintStream originalErr) throws IOException {
         this.logFile = logFile;
@@ -28,8 +32,9 @@ public final class RunLogManager implements AutoCloseable {
         this.filePrint = new PrintStream(
                 Files.newOutputStream(logFile, StandardOpenOption.CREATE, StandardOpenOption.APPEND),
                 true, StandardCharsets.UTF_8);
-        this.teeOut = new TeePrintStream(originalOut, filePrint);
-        this.teeErr = new TeePrintStream(originalErr, filePrint);
+        this.fileOutput = new RedactingLineOutputStream(filePrint);
+        this.teeOut = new TeePrintStream(originalOut, fileOutput);
+        this.teeErr = new TeePrintStream(originalErr, fileOutput);
         System.setOut(teeOut);
         System.setErr(teeErr);
         log("=== AI Testing Agent run started ===");
@@ -45,21 +50,27 @@ public final class RunLogManager implements AutoCloseable {
         return new RunLogManager(file, System.out, System.err);
     }
 
-    public void log(String message) {
-        String line = "[" + Instant.now() + "] " + (message == null ? "" : message);
-        teeOut.println(line);
+    public synchronized void log(String message) {
+        if (closed) return;
+        teeOut.println("[" + Instant.now() + "] " + (message == null ? "" : message));
     }
 
     public Path logFile() { return logFile; }
 
     @Override
-    public void close() {
-        log("=== AI Testing Agent run finished ===");
-        teeOut.flush();
-        teeErr.flush();
-        System.setOut(originalOut);
-        System.setErr(originalErr);
-        filePrint.close();
+    public synchronized void close() {
+        if (closed) return;
+        closed = true;
+        try {
+            teeOut.println("[" + Instant.now() + "] === AI Testing Agent run finished ===");
+            teeOut.flush();
+            teeErr.flush();
+            fileOutput.flush();
+        } finally {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+            filePrint.close();
+        }
     }
 
     private static String safe(String value, String fallback) {
@@ -69,14 +80,56 @@ public final class RunLogManager implements AutoCloseable {
     }
 
     private static final class TeePrintStream extends PrintStream {
-        TeePrintStream(PrintStream console, PrintStream file) throws IOException {
+        TeePrintStream(PrintStream console, OutputStream file) throws IOException {
             super(new OutputStream() {
-                @Override public void write(int b) { console.write(b); file.write(b); }
-                @Override public void write(byte[] b, int off, int len) { console.write(b, off, len); file.write(b, off, len); }
-                @Override public void flush() { console.flush(); file.flush(); }
+                @Override public synchronized void write(int b) throws IOException {
+                    console.write(b);
+                    file.write(b);
+                }
+                @Override public synchronized void write(byte[] b, int off, int len) throws IOException {
+                    console.write(b, off, len);
+                    file.write(b, off, len);
+                }
+                @Override public synchronized void flush() throws IOException {
+                    console.flush();
+                    file.flush();
+                }
             }, true, StandardCharsets.UTF_8);
         }
 
         @Override public void close() { flush(); }
+    }
+
+    /** Buffers terminal output by line so secrets split across PrintStream writes are still redacted. */
+    private static final class RedactingLineOutputStream extends OutputStream {
+        private final OutputStream target;
+        private final StringBuilder line = new StringBuilder();
+
+        RedactingLineOutputStream(OutputStream target) {
+            this.target = target;
+        }
+
+        @Override
+        public synchronized void write(int b) throws IOException {
+            line.append((char) (b & 0xFF));
+            if (b == '\n') flushLine();
+        }
+
+        @Override
+        public synchronized void write(byte[] b, int off, int len) throws IOException {
+            for (int i = off; i < off + len; i++) write(b[i]);
+        }
+
+        @Override
+        public synchronized void flush() throws IOException {
+            if (!line.isEmpty()) flushLine();
+            target.flush();
+        }
+
+        private void flushLine() throws IOException {
+            String redacted = SecurityRedactor.redactText(line.toString());
+            target.write(redacted.getBytes(StandardCharsets.UTF_8));
+            line.setLength(0);
+        }
     }
 }
