@@ -12,21 +12,27 @@ public record Config(
         String reportsDir,
         String screenshotsDir) {
 
+    public static final int MAX_PARALLELISM = 64;
+
     public Config {
         if (ollamaUrl == null || ollamaUrl.isBlank())
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "OLLAMA_URL cannot be blank");
+            throw configuration("OLLAMA_URL cannot be blank");
         if (ollamaModel == null || ollamaModel.isBlank())
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "OLLAMA_MODEL cannot be blank");
+            throw configuration("OLLAMA_MODEL cannot be blank");
         if (defaultTimeoutMs < 1)
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "DEFAULT_TIMEOUT_MS must be at least 1");
+            throw configuration("DEFAULT_TIMEOUT_MS must be at least 1");
         if (retries < 0)
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "RETRIES cannot be negative");
-        if (parallelism < 1)
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "PARALLELISM must be at least 1");
+            throw configuration("RETRIES cannot be negative");
+        if (parallelism < 1 || parallelism > MAX_PARALLELISM)
+            throw configuration("PARALLELISM must be between 1 and " + MAX_PARALLELISM);
         if (reportsDir == null || reportsDir.isBlank())
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "REPORTS_DIR cannot be blank");
+            throw configuration("REPORTS_DIR cannot be blank");
         if (screenshotsDir == null || screenshotsDir.isBlank())
-            throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "SCREENSHOTS_DIR cannot be blank");
+            throw configuration("SCREENSHOTS_DIR cannot be blank");
+    }
+
+    private static AgentExecutionException configuration(String message) {
+        return new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, message);
     }
 
     private static String env(String key, String fallback) {
