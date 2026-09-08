@@ -2,6 +2,7 @@ package com.thiyagarajan.agent.io;
 
 import com.thiyagarajan.agent.runtime.SecurityRedactor;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -60,13 +61,13 @@ public final class RunLogManager implements AutoCloseable {
     @Override
     public synchronized void close() {
         if (closed) return;
-        closed = true;
         try {
             teeOut.println("[" + Instant.now() + "] === AI Testing Agent run finished ===");
             teeOut.flush();
             teeErr.flush();
             fileOutput.flush();
         } finally {
+            closed = true;
             System.setOut(originalOut);
             System.setErr(originalErr);
             filePrint.close();
@@ -100,10 +101,10 @@ public final class RunLogManager implements AutoCloseable {
         @Override public void close() { flush(); }
     }
 
-    /** Buffers terminal output by line so secrets split across PrintStream writes are still redacted. */
+    /** Buffers UTF-8 terminal output by line so secrets are redacted without corrupting Unicode. */
     private static final class RedactingLineOutputStream extends OutputStream {
         private final OutputStream target;
-        private final StringBuilder line = new StringBuilder();
+        private final ByteArrayOutputStream line = new ByteArrayOutputStream();
 
         RedactingLineOutputStream(OutputStream target) {
             this.target = target;
@@ -111,25 +112,35 @@ public final class RunLogManager implements AutoCloseable {
 
         @Override
         public synchronized void write(int b) throws IOException {
-            line.append((char) (b & 0xFF));
+            line.write(b);
             if (b == '\n') flushLine();
         }
 
         @Override
         public synchronized void write(byte[] b, int off, int len) throws IOException {
-            for (int i = off; i < off + len; i++) write(b[i]);
+            line.write(b, off, len);
+            int end = off + len;
+            int newline = off;
+            while (newline < end) {
+                if (b[newline] == '\n') {
+                    flushLine();
+                    if (newline + 1 < end) line.write(b, newline + 1, end - newline - 1);
+                    return;
+                }
+                newline++;
+            }
         }
 
         @Override
         public synchronized void flush() throws IOException {
-            if (!line.isEmpty()) flushLine();
+            if (line.size() > 0) flushLine();
             target.flush();
         }
 
         private void flushLine() throws IOException {
-            String redacted = SecurityRedactor.redactText(line.toString());
+            String redacted = SecurityRedactor.redactText(line.toString(StandardCharsets.UTF_8));
             target.write(redacted.getBytes(StandardCharsets.UTF_8));
-            line.setLength(0);
+            line.reset();
         }
     }
 }
