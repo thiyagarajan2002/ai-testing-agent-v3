@@ -16,7 +16,13 @@ All notable project changes are documented here at release level. The complete i
 - Added API-oriented terminal logs under `reports/api/logs/` and UI interactive logs under `reports/ui/logs/`.
 - Added redaction before API execution details are persisted.
 - Kept the explicit `screenshot` UI action backward compatible while making per-step evidence automatic.
-- Updated `PROJECT_DETAILS.md` and `examples/README.md` with run commands and evidence locations.
+- Unified execution reporting so each run produces exactly `report.html`, `report.csv` and `report.pdf` from the same `ExecutionResult`.
+- Enhanced HTML reporting with KPI cards, search, PASS/FAIL and slow-step filters, sortable columns, expandable details, artifact links, theme switching and print support.
+- Enhanced CSV reporting with UTF-8 BOM, CSV-safe quoting and a summary footer for status, counts, pass rate, duration statistics and failure analysis.
+- Enhanced PDF reporting with the same execution summary, duration metrics, detailed step results, input/output text, artifacts and failure analysis.
+- Removed `execution.log` generation from the `ReportManager` report bundle; runtime logs remain separate execution evidence.
+- Added `ReportManagerTest` regression coverage to enforce the three-report bundle and core content.
+- Updated `README.md`, `PROJECT_DETAILS.md` and example/evidence documentation.
 
 ## 3.20.0
 
