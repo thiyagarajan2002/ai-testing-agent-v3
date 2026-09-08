@@ -1,75 +1,60 @@
-# AI Testing Agent — v3.24.0
+# AI Testing Agent — v3.25.0
 
 AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, retries, artifacts, reporting, suites, history/analytics, security redaction, preflight validation and data-driven execution.
 
-## v3.24.0 — Phase 3 API Testing Enhancement
+## v3.25.0 — Phase 4 UI Testing Enhancement
 
-Phase 3 expands the API execution layer into a more complete HTTP testing engine:
+Phase 4 strengthens Playwright execution with reliable lifecycle handling, event-oriented waiting and broader UI actions/assertions.
 
-- **HTTP methods:** GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS.
-- **Request construction:** substituted path/query/header values, JSON/text request bodies, configurable `Content-Type` and `application/x-www-form-urlencoded` form data.
-- **Authentication:** bearer token, preemptive basic authentication, API key in a header, and API key in a query parameter.
-- **Assertions:** status, body contains/not-contains/regex, header equality, JSONPath exists/equality/contains/regex, XMLPath exists/equality and response-time limits.
-- **Variable reuse:** response JSON extraction can save values for later steps.
-- **Retries:** global or step-specific retry counts continue to work with the enhanced request pipeline.
-- **Diagnostics:** request/response logs, bounded response evidence and failure artifacts remain integrated.
-- **Security:** authentication values are not explicitly written into request logs; persisted diagnostics continue through the existing redaction pipeline.
-- **Regression coverage:** local HTTP-server tests cover bearer authentication, JSON requests, form requests and API assertions.
+- **Browser lifecycle:** explicit browser context creation and guaranteed context/browser cleanup.
+- **Navigation:** waits for `DOMContentLoaded` instead of using a fixed sleep after navigation.
+- **Locator execution:** locator-required actions fail clearly when a locator is missing.
+- **UI actions:** click, fill, press, selectOption, hover, check and uncheck.
+- **Assertions:** visible, text, input value, page title and URL.
+- **Event-oriented waits:** wait for locator visibility/hidden state; the legacy timed `waitfor` action remains available for compatibility.
+- **Timeouts:** plan-level default timeout remains available and each step can override it.
+- **Evidence:** successful steps receive full-page screenshots; failed steps receive failure screenshots and metadata.
+- **Diagnostics:** UI exceptions are redacted before being placed in execution results.
+- **Regression safety:** the implementation keeps the existing `ExecutionResult`, report and artifact integration intact.
 
-### API authentication example
+### UI action example
 
 ```json
 {
-  "action": "GET",
-  "path": "/users/1",
-  "auth": {
-    "type": "bearer",
-    "token": "${API_TOKEN}"
-  },
-  "assertions": [
-    { "type": "status", "expected": "200" },
-    { "type": "jsonPathExists", "path": "id", "expected": "true" }
+  "name": "Login smoke",
+  "type": "UI",
+  "baseUrl": "https://example.com",
+  "steps": [
+    { "action": "navigate", "value": "/login" },
+    { "action": "waitforvisible", "locator": "#username" },
+    { "action": "fill", "locator": "#username", "value": "demo" },
+    { "action": "fill", "locator": "#password", "value": "${PASSWORD}" },
+    { "action": "click", "locator": "button[type=submit]" },
+    { "action": "assertvisible", "locator": ".dashboard" },
+    { "action": "asserttitle", "value": "Dashboard" }
   ]
 }
 ```
 
-Supported `auth.type` values are `none`, `bearer`, `basic`, `apiKeyHeader`, and `apiKeyQuery`.
+## v3.24.0 — Phase 3 API Testing Enhancement
 
-### Request body example
-
-```json
-{
-  "action": "POST",
-  "path": "/users",
-  "contentType": "application/json",
-  "body": "{\"name\":\"${userName}\"}",
-  "assertSpec": { "status": 201 }
-}
-```
-
-For URL-encoded forms use:
-
-```json
-{
-  "action": "POST",
-  "path": "/login",
-  "form": { "username": "${username}", "password": "${password}" }
-}
-```
+- HTTP methods: GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS.
+- Request construction with substituted path/query/header values, JSON/text bodies, content types and URL-encoded forms.
+- Bearer, basic, API-key-header and API-key-query authentication.
+- Status, body, header, JSONPath, XMLPath and response-time assertions.
+- Response-variable extraction, retries, diagnostics and secure logging.
 
 ## v3.23.0 — Phase 2 Reporting Standardization & Integrity
 
 - Every execution report contains exactly `report.html`, `report.csv` and `report.pdf`.
-- HTML, CSV and PDF derive their core execution data from the same `ExecutionResult`.
-- `ReportIntegrityValidator` validates the exact package, non-empty outputs, HTML markers, CSV BOM/summary and PDF signature.
-- Regression coverage protects complete, incomplete, unexpected-file and invalid-PDF report packages.
+- HTML, CSV and PDF derive core execution data from the same `ExecutionResult`.
+- `ReportIntegrityValidator` validates the report package and regression coverage protects incomplete packages.
 
 ## v3.22.0 — Phase 1 Stability & Security
 
-- `PARALLELISM` is restricted to 1–64.
-- Runtime failures use standardized `AgentExecutionException` categories.
-- CLI exception handling preserves durable logs and stack traces before process exit.
-- Persisted terminal logs redact sensitive values and preserve UTF-8 output.
+- `PARALLELISM` restricted to 1–64.
+- Standardized runtime error categories.
+- Durable CLI logging and secure UTF-8 redaction.
 - JSON fixture validation accepts arrays under `examples/data/` while executable JSON remains object-only.
 
 ## Unified execution reports
@@ -104,12 +89,6 @@ Run an API plan:
 mvn exec:java -Dexec.args="plan examples/plans/api/get-user.json"
 ```
 
-Run API regression:
-
-```bash
-mvn exec:java -Dexec.args="suite examples/suites/api-regression-suite.json"
-```
-
 ## UI examples
 
 ```text
@@ -131,8 +110,6 @@ Install Chromium when required:
 ```bash
 mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromium"
 ```
-
-Successful UI steps automatically capture screenshots; failed UI steps capture failure evidence.
 
 ## Core commands
 
@@ -161,7 +138,8 @@ Do not store production credentials in plans or datasets. Authentication and sen
 
 ## Version history
 
-- **v3.24.0** — Phase 3 API testing enhancement: HTTP methods, authentication, request bodies/content types/forms and JSON/XML assertions
+- **v3.25.0** — Phase 4 UI testing enhancement: Playwright lifecycle, event-oriented waits, actions, assertions and evidence hardening
+- **v3.24.0** — Phase 3 API testing enhancement
 - **v3.23.0** — Phase 2 reporting standardization and report package integrity validation
 - **v3.22.0** — Phase 1 stability, configuration bounds, standardized errors and secure logging
 - v3.21.0 — API/UI examples, screenshots, execution logs and unified reports
