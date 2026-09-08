@@ -9,6 +9,9 @@ public class ExecutionResult {
     public String failureAnalysis = "";
     public List<StepResult> steps = new ArrayList<>();
 
+    public ExecutionResult() {
+    }
+
     public boolean passed() { return passed; }
     public String failureAnalysis() { return failureAnalysis; }
     public void failureAnalysis(String value) { this.failureAnalysis = SecurityRedactor.redactText(value); }
@@ -19,6 +22,10 @@ public class ExecutionResult {
         public String details;
         public long durationMs;
         public List<String> artifacts = new ArrayList<>();
+
+        public StepResult() {
+            // Required by Jackson when loading persisted execution history.
+        }
 
         public StepResult(String action, boolean passed, String details, long durationMs) {
             this.action = action;
