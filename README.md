@@ -97,6 +97,25 @@ reports/terminal/logs/
 
 The terminal log includes the command, application output/errors and final exit code.
 
+## Unified execution reports
+
+Each execution report bundle contains exactly these three report formats:
+
+```text
+reports/<run>/
+├── report.html
+├── report.csv
+└── report.pdf
+```
+
+All three are generated from the same `ExecutionResult`, so test status, step counts, durations, details, artifacts and failure analysis stay consistent across formats.
+
+- **HTML** — interactive dashboard with KPI cards, search, PASS/FAIL filtering, slow-step filtering, sortable step table, expandable details, theme toggle, print support and links to CSV/PDF.
+- **CSV** — UTF-8 BOM/RFC4180-compatible execution rows plus summary metrics such as overall status, totals, pass rate, duration, min/max/average latency and failure analysis.
+- **PDF** — printable execution summary with pass/fail metrics, duration statistics, step-by-step details, input/output text, artifact references and failure analysis.
+
+API request/response logs, terminal logs and UI screenshots remain separate runtime evidence. When they are attached to a step, the reports include the artifact reference rather than creating additional report formats.
+
 ## Core commands
 
 ```bash
@@ -145,7 +164,7 @@ Do not store production credentials in plans or datasets. Sensitive execution di
 
 ## Version history
 
-- **v3.21.0** — comprehensive API/UI examples, automatic UI screenshots, API execution logs and terminal log persistence
+- **v3.21.0** — comprehensive API/UI examples, automatic UI screenshots, API execution logs, terminal log persistence and unified HTML/CSV/PDF execution reports
 - v3.20.0 — repository organization and engineering standards
 - v3.19.0 — parallel data-driven execution, ordered results and performance metrics
 - v3.18.0 — CSV datasets, dataset validation and exact row filtering
@@ -168,4 +187,4 @@ Do not store production credentials in plans or datasets. Sensitive execution di
 
 ## Repository
 
-urlAI Testing Agent v3 on GitHubhttps://github.com/thiyagarajan2002/ai-testing-agent-v3
+https://github.com/thiyagarajan2002/ai-testing-agent-v3
