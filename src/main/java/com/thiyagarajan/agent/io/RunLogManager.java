@@ -59,7 +59,7 @@ public final class RunLogManager implements AutoCloseable {
     public Path logFile() { return logFile; }
 
     @Override
-    public synchronized void close() {
+    public synchronized void close() throws IOException {
         if (closed) return;
         try {
             teeOut.println("[" + Instant.now() + "] === AI Testing Agent run finished ===");
@@ -120,14 +120,12 @@ public final class RunLogManager implements AutoCloseable {
         public synchronized void write(byte[] b, int off, int len) throws IOException {
             line.write(b, off, len);
             int end = off + len;
-            int newline = off;
-            while (newline < end) {
-                if (b[newline] == '\n') {
+            for (int i = off; i < end; i++) {
+                if (b[i] == '\n') {
                     flushLine();
-                    if (newline + 1 < end) line.write(b, newline + 1, end - newline - 1);
+                    if (i + 1 < end) line.write(b, i + 1, end - i - 1);
                     return;
                 }
-                newline++;
             }
         }
 
