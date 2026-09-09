@@ -1,6 +1,18 @@
-# AI Testing Agent — v3.31.0
+# AI Testing Agent — v3.32.0
 
 AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, bounded retries, safe locator healing, artifacts, reporting, suites, execution history/analytics, trend analysis, security redaction, preflight validation, data-driven execution and structured AI test intelligence.
+
+## v3.32.0 — AI Self-Healing v2
+
+Phase 10 strengthens UI locator healing with explicit safety boundaries and evidence.
+
+- **Confidence threshold:** only candidates meeting the default 0.90 confidence threshold are eligible.
+- **Evidence capture:** each evaluated candidate records match count, visibility, confidence and reason.
+- **Uniqueness gate:** a healed selector must resolve to exactly one visible element.
+- **Conservative candidates:** healing remains limited to selectors deterministically derived from the original locator; broad XPath/text guessing is not used.
+- **Failure evidence:** unsuccessful healing attempts include candidate evidence in the step details and failure metadata.
+- **Security:** locator/reason evidence passes through the existing report/log redaction boundary.
+- **Regression coverage:** confidence validation and existing conservative-candidate tests are covered by JUnit.
 
 ## v3.31.0 — Report Comparison & Trend Analysis
 
@@ -12,18 +24,7 @@ Phase 9 extends execution history into a trend-oriented reporting layer.
 - **Flaky-test trend:** calculate the cumulative number of tests meeting the existing 50% status-change threshold at each run; a single run is never treated as proof of flakiness.
 - **Trend artifacts:** `reports/history/trends.json`, `trends.csv` and `trends.html` are generated from persisted history.
 - **Report navigation:** trend rows link directly to each run's `comparison.html`; the trend dashboard links back to history and flaky/slow analytics.
-- **CLI:** `history [--limit N]` now generates and prints the trend dashboard location.
-- **Security:** generated trend text passes through the existing security redaction boundary.
-- **Regression coverage:** trend calculations and artifact generation are covered by JUnit tests.
-
-### Execution history and trend command
-
-```text
-mvn exec:java -Dexec.args="history"
-mvn exec:java -Dexec.args="history --limit 20"
-```
-
-The command remains read-only with respect to existing run records; it only refreshes derived analytics/trend artifacts.
+- **CLI:** `history [--limit N]` generates and prints the trend dashboard location.
 
 ## v3.30.0 — Execution History
 
@@ -43,12 +44,6 @@ Phase 7 introduced a unique Run ID for every CLI execution, propagated through t
 ## v3.28.0 — Phase 7 Self-Healing & Adaptive Execution
 
 Phase 7 adds bounded adaptive retry behavior and conservative UI locator healing.
-
-- **Adaptive retry policy:** deterministic exponential backoff with a hard delay cap.
-- **Retry safety:** only transient retry recommendations are eligible for automatic retry.
-- **Locator healing:** failed locator actions may try a safe alternative derived from the original selector.
-- **Confidence scoring:** healing candidates carry confidence and rationale.
-- **Uniqueness gate:** a candidate is accepted only when Playwright finds exactly one visible element.
 
 ## v3.27.0 — Phase 6 Failure Intelligence & Smart Retry Guidance
 
