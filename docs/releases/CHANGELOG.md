@@ -2,6 +2,17 @@
 
 All notable project changes are documented here at release level. The complete implementation history and method-level details remain in `PROJECT_DETAILS.md`.
 
+## 3.28.0
+
+- Added bounded `AdaptiveRetryPolicy` with deterministic exponential backoff and a hard delay cap.
+- Restricted automatic retry eligibility to transient `RETRY` and `RETRY_WITH_BACKOFF` recommendations.
+- Added `SelfHealingEngine` for conservative UI locator alternatives with confidence and rationale.
+- Added uniqueness and visibility gates before accepting a healed locator.
+- Integrated one-attempt locator healing into `UiExecutor` without mutating the test plan.
+- Added healing audit details containing original locator, healed locator, confidence and reason.
+- Added regression tests for retry budgets/backoff and locator candidate generation.
+- Updated Maven version and complete documentation to 3.28.0.
+
 ## 3.27.0
 
 - Added deterministic `FailureIntelligence` for classifying execution failures.
