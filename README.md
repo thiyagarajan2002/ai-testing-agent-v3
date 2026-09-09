@@ -1,30 +1,26 @@
-# AI Testing Agent — v3.27.0
+# AI Testing Agent — v3.28.0
 
-AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, retries, artifacts, reporting, suites, history/analytics, security redaction, preflight validation, data-driven execution, structured AI test intelligence and deterministic failure intelligence.
+AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, bounded retries, safe locator healing, artifacts, reporting, suites, history/analytics, security redaction, preflight validation, data-driven execution and structured AI test intelligence.
+
+## v3.28.0 — Phase 7 Self-Healing & Adaptive Execution
+
+Phase 7 adds bounded adaptive retry behavior and conservative UI locator healing on top of deterministic failure intelligence.
+
+- **Adaptive retry policy:** deterministic exponential backoff with a hard delay cap.
+- **Retry safety:** only `RETRY` and `RETRY_WITH_BACKOFF` recommendations are eligible for automatic retry; assertion/authentication/validation failures remain non-retryable.
+- **Retry budget:** callers must provide a finite retry count; no infinite retry loop is introduced.
+- **Locator healing:** failed locator actions may try a single safe alternative derived from the original selector.
+- **Confidence scoring:** healing candidates carry a confidence score and rationale.
+- **Uniqueness gate:** a candidate is accepted only when Playwright finds exactly one visible element.
+- **Healing audit trail:** successful healing records the original locator, healed locator, confidence and reason in the execution step details.
+- **Security boundary:** the engine does not send DOM data or credentials to an AI provider and does not blindly mutate test plans.
+- **Regression coverage:** retry budget/backoff and conservative locator-candidate tests are included.
+
+The Phase 7 healing implementation is intentionally conservative. It currently derives alternatives for stable `id`, `data-testid` and `name` selector relationships. Broad XPath/text guessing is deliberately excluded.
 
 ## v3.27.0 — Phase 6 Failure Intelligence & Smart Retry Guidance
 
-Phase 6 adds a safe failure-diagnosis layer that turns failed execution results into deterministic remediation guidance.
-
-- **Failure classification:** assertion, timeout, authentication, network, locator, validation, server and unknown categories.
-- **Retry guidance:** `RETRY`, `RETRY_WITH_BACKOFF`, `DO_NOT_RETRY` and `HEAL_LOCATOR`.
-- **Deterministic:** classification does not require Ollama, so CI behavior remains predictable.
-- **Safe retry model:** recommendations are bounded guidance, not an automatic infinite retry loop.
-- **Locator healing boundary:** locator failures are identified as healing candidates, but the framework does not blindly mutate selectors.
-- **AgentRunner integration:** `analyzeFailureIntelligence(...)` exposes the recommendation programmatically.
-- **Regression coverage:** timeout, authentication and locator classification tests are included.
-
-Example:
-
-```java
-ExecutionResult result = runner.execute(plan);
-if (!result.passed()) {
-    FailureIntelligence.Analysis analysis = runner.analyzeFailureIntelligence(result);
-    System.out.println(analysis.category());
-    System.out.println(analysis.recommendation());
-    System.out.println(analysis.rationale());
-}
-```
+Phase 6 adds deterministic failure classification for assertion, timeout, authentication, network, locator, validation, server and unknown failures, with bounded retry/healing recommendations.
 
 ## v3.26.0 — Phase 5 AI Testing Intelligence
 
@@ -68,10 +64,11 @@ mvn exec:java -Dexec.args="interactive"
 
 ## Security
 
-Do not store production credentials in plans or datasets. Persisted diagnostics use the existing redaction pipeline. AI prompts use placeholders instead of invented secrets. Failure recommendations are bounded and never grant an AI provider unrestricted retry or selector-mutation control.
+Do not store production credentials in plans or datasets. Persisted diagnostics use the existing redaction pipeline. AI prompts use placeholders instead of invented secrets. Retry and healing behavior is bounded, deterministic and cannot grant an AI provider unrestricted execution control.
 
 ## Version history
 
+- **v3.28.0** — Phase 7 self-healing and adaptive execution
 - **v3.27.0** — Phase 6 failure intelligence and smart retry/healing guidance
 - **v3.26.0** — Phase 5 AI testing intelligence
 - **v3.25.0** — Phase 4 UI testing enhancement
