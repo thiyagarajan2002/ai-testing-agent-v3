@@ -2,6 +2,19 @@
 
 All notable project changes are documented here at release level. The complete implementation history and method-level details remain in `PROJECT_DETAILS.md`.
 
+## 3.26.0
+
+- Added provider-neutral `AiProvider` abstraction and made `OllamaClient` implement it.
+- Added structured `AiIntelligenceResult` for requirement summaries, generated scenarios, coverage, missing-test detection and duplicate groups.
+- Added `PromptManager.intelligencePrompt(...)` for multi-scenario positive, negative, boundary, authentication, validation and resilience test generation.
+- Added `AgentRunner.intelligence(...)` with strict scenario-ID, embedded-plan, coverage-reference and duplicate-reference validation.
+- Exposed structured intelligence through `TestOrchestrator.intelligence(...)`.
+- Added regression tests with deterministic injected AI responses, including invalid coverage and duplicate scenario IDs.
+- Aligned `TestPlanValidator` with actual Phase 3 API actions (`HEAD`, `OPTIONS`) and Phase 4 UI actions/assertions/waits.
+- Added strict locator preflight validation for locator-dependent UI actions and numeric validation for timed waits.
+- Updated Maven and CLI version metadata to 3.26.0.
+- Updated README and complete project documentation for Phase 5.
+
 ## 3.25.0
 
 - Hardened Playwright browser/context lifecycle with guaranteed cleanup.
