@@ -42,19 +42,29 @@ public final class TestPlanValidator {
 
                 String action = step.action.trim();
                 if ("API".equalsIgnoreCase(plan.type)) {
-                    if (!action.matches("(?i)GET|POST|PUT|PATCH|DELETE"))
+                    if (!action.matches("(?i)GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS"))
                         errors.add(prefix + ": invalid API action: " + action);
                     if (step.path == null || step.path.isBlank()) warnings.add(prefix + ": API path is blank; base URL will be called directly");
                 } else {
-                    if (!action.matches("(?i)navigate|click|fill|press|selectOption|assertVisible|assertText|assertValue|waitFor|screenshot"))
+                    if (!action.matches("(?i)navigate|click|fill|press|selectOption|hover|check|uncheck|assertVisible|assertText|assertValue|assertTitle|assertUrl|waitFor|waitForVisible|waitForHidden|screenshot"))
                         errors.add(prefix + ": invalid UI action: " + action);
-                    if (!"navigate".equalsIgnoreCase(action) && !"screenshot".equalsIgnoreCase(action)
-                            && (step.locator == null || step.locator.isBlank()))
-                        warnings.add(prefix + ": locator is blank for action " + action);
+                    if (requiresLocator(action) && (step.locator == null || step.locator.isBlank()))
+                        errors.add(prefix + ": locator is required for action " + action);
+                    if ("waitFor".equalsIgnoreCase(action)) {
+                        try {
+                            if (Long.parseLong(step.value) < 0) errors.add(prefix + ": waitFor value cannot be negative");
+                        } catch (Exception e) {
+                            errors.add(prefix + ": waitFor value must be milliseconds");
+                        }
+                    }
                 }
             }
         }
         return new ValidationResult(errors, warnings);
+    }
+
+    private static boolean requiresLocator(String action) {
+        return action.matches("(?i)click|fill|press|selectOption|hover|check|uncheck|assertVisible|assertText|assertValue|waitForVisible|waitForHidden");
     }
 
     public static void requireValid(TestPlan plan) {
