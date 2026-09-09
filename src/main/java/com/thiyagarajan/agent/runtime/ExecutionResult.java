@@ -12,12 +12,21 @@ public class ExecutionResult {
     public List<StepResult> steps = new ArrayList<>();
 
     public ExecutionResult() {
+        runId = RunContext.currentRunId();
+        if (!runId.isBlank()) testId = runId + "-test-1";
     }
 
     /** Attach the current run identity while keeping deserialization backward compatible. */
     public void ensureIdentity() {
         if (runId.isBlank()) runId = RunContext.currentRunId();
         if (testId.isBlank() && !runId.isBlank()) testId = runId + "-test-1";
+        if (!runId.isBlank()) {
+            for (int i = 0; i < steps.size(); i++) {
+                if (steps.get(i) != null && steps.get(i).stepId.isBlank()) {
+                    steps.get(i).stepId = runId + "-test-1-step-" + (i + 1);
+                }
+            }
+        }
     }
 
     public boolean passed() { return passed; }
