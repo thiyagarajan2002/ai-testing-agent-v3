@@ -1,6 +1,8 @@
 package com.thiyagarajan.agent.runtime;
 
 import com.microsoft.playwright.*;
+import com.microsoft.playwright.options.WaitForSelectorState;
+import com.microsoft.playwright.options.WaitUntilState;
 import com.thiyagarajan.agent.config.Config;
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestStep;
