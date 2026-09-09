@@ -1,6 +1,29 @@
-# AI Testing Agent — v3.30.0
+# AI Testing Agent — v3.31.0
 
-AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, bounded retries, safe locator healing, artifacts, reporting, suites, execution history/analytics, security redaction, preflight validation, data-driven execution and structured AI test intelligence.
+AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, bounded retries, safe locator healing, artifacts, reporting, suites, execution history/analytics, trend analysis, security redaction, preflight validation, data-driven execution and structured AI test intelligence.
+
+## v3.31.0 — Report Comparison & Trend Analysis
+
+Phase 9 extends execution history into a trend-oriented reporting layer.
+
+- **Pass-rate trends:** compare the first and latest analyzed runs in percentage points.
+- **Duration trends:** track execution-duration delta and peak duration across runs.
+- **Regression trends:** aggregate regressions across the selected history window.
+- **Flaky-test trend:** calculate the cumulative number of tests meeting the existing 50% status-change threshold at each run; a single run is never treated as proof of flakiness.
+- **Trend artifacts:** `reports/history/trends.json`, `trends.csv` and `trends.html` are generated from persisted history.
+- **Report navigation:** trend rows link directly to each run's `comparison.html`; the trend dashboard links back to history and flaky/slow analytics.
+- **CLI:** `history [--limit N]` now generates and prints the trend dashboard location.
+- **Security:** generated trend text passes through the existing security redaction boundary.
+- **Regression coverage:** trend calculations and artifact generation are covered by JUnit tests.
+
+### Execution history and trend command
+
+```text
+mvn exec:java -Dexec.args="history"
+mvn exec:java -Dexec.args="history --limit 20"
+```
+
+The command remains read-only with respect to existing run records; it only refreshes derived analytics/trend artifacts.
 
 ## v3.30.0 — Execution History
 
@@ -12,18 +35,6 @@ Phase 8 formalizes persistent suite execution history and exposes it from the CL
 - **Historical comparison:** the current run is compared with the previous recorded run to identify regressions, fixed tests, new tests, removed tests and unchanged results.
 - **Analytics:** historical analytics identify flaky tests and slowest tests over a configurable number of runs.
 - **Dashboards:** `index.html` provides history navigation and `analytics.html` provides historical analytics.
-- **CLI:** `history [--limit N]` prints recent runs and analytics locations.
-- **Security:** history and generated comparison text continue to pass through the existing security redaction boundary.
-- **Regression coverage:** history recording and regression/fixed-test comparison are covered by JUnit tests.
-
-### Execution history command
-
-```text
-mvn exec:java -Dexec.args="history"
-mvn exec:java -Dexec.args="history --limit 20"
-```
-
-The history command is read-only; it does not alter previously recorded runs.
 
 ## v3.29.0 — Run ID & Correlation ID
 
