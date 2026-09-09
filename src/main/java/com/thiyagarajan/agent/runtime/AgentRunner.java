@@ -1,29 +1,28 @@
 package com.thiyagarajan.agent.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.thiyagarajan.agent.ai.OllamaClient;
+import com.thiyagarajan.agent.ai.AiIntelligenceResult;
+import com.thiyagarajan.agent.ai.AiProvider;
 import com.thiyagarajan.agent.ai.PromptManager;
 import com.thiyagarajan.agent.model.TestPlan;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class AgentRunner {
-    private final OllamaClient llm;
+    private final AiProvider llm;
     private final ObjectMapper mapper;
 
-    public AgentRunner(OllamaClient llm, ObjectMapper mapper) {
+    public AgentRunner(AiProvider llm, ObjectMapper mapper) {
         if (mapper == null) throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "ObjectMapper cannot be null");
         this.llm = llm;
         this.mapper = mapper;
     }
 
     public TestPlan plan(String requirement) throws Exception {
-        if (requirement == null || requirement.isBlank()) {
-            throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Requirement cannot be blank");
-        }
-        if (llm == null) {
-            throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Ollama client is not configured");
-        }
+        requireRequirement(requirement);
+        requireAi();
         try {
             TestPlan plan = mapper.readValue(cleanJson(llm.generate(PromptManager.planningPrompt(requirement))), TestPlan.class);
             validate(plan);
@@ -33,6 +32,23 @@ public class AgentRunner {
         } catch (Exception e) {
             throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION,
                     "Unable to generate a valid test plan: " + e.getMessage(), e);
+        }
+    }
+
+    /** Generates multiple executable scenarios plus requirement coverage, duplicate and gap analysis. */
+    public AiIntelligenceResult intelligence(String requirement) throws Exception {
+        requireRequirement(requirement);
+        requireAi();
+        try {
+            AiIntelligenceResult result = mapper.readValue(
+                    cleanJson(llm.generate(PromptManager.intelligencePrompt(requirement))), AiIntelligenceResult.class);
+            validateIntelligence(result);
+            return result;
+        } catch (AgentExecutionException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION,
+                    "Unable to generate valid AI test intelligence: " + e.getMessage(), e);
         }
     }
 
@@ -86,7 +102,7 @@ public class AgentRunner {
 
     public ExecutionResult analyzeFailure(TestPlan plan, ExecutionResult result) throws Exception {
         if (result == null) throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Execution result cannot be null");
-        if (llm == null) throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Ollama client is not configured");
+        requireAi();
         String safePlan = SecurityRedactor.redactText(mapper.writeValueAsString(plan));
         String safeResult = SecurityRedactor.redactText(mapper.writeValueAsString(result));
         try {
@@ -96,6 +112,67 @@ public class AgentRunner {
                     "Failure analysis generation failed: " + e.getMessage(), e);
         }
         return result;
+    }
+
+    private void validateIntelligence(AiIntelligenceResult result) {
+        if (result == null || result.scenarios == null || result.scenarios.isEmpty()) {
+            throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION,
+                    "AI intelligence contains no scenarios");
+        }
+        Set<String> ids = new HashSet<>();
+        for (AiIntelligenceResult.Scenario scenario : result.scenarios) {
+            if (scenario == null || scenario.id == null || scenario.id.isBlank()) {
+                throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION,
+                        "AI intelligence scenario id is required");
+            }
+            if (!ids.add(scenario.id)) {
+                throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION,
+                        "Duplicate AI scenario id: " + scenario.id);
+            }
+            if (scenario.plan == null) {
+                throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION,
+                        "AI scenario " + scenario.id + " has no executable plan");
+            }
+            validate(scenario.plan);
+        }
+        if (result.coverage != null) {
+            for (AiIntelligenceResult.Coverage coverage : result.coverage) {
+                if (coverage == null || coverage.requirement == null || coverage.requirement.isBlank()) {
+                    throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION,
+                            "Coverage requirement text is required");
+                }
+                if (coverage.testIds == null) continue;
+                for (String id : coverage.testIds) {
+                    if (!ids.contains(id)) {
+                        throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION,
+                                "Coverage references unknown scenario: " + id);
+                    }
+                }
+            }
+        }
+        if (result.duplicateGroups != null) {
+            for (List<String> group : result.duplicateGroups) {
+                if (group == null) continue;
+                for (String id : group) {
+                    if (!ids.contains(id)) {
+                        throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION,
+                                "Duplicate group references unknown scenario: " + id);
+                    }
+                }
+            }
+        }
+    }
+
+    private void requireRequirement(String requirement) {
+        if (requirement == null || requirement.isBlank()) {
+            throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Requirement cannot be blank");
+        }
+    }
+
+    private void requireAi() {
+        if (llm == null) {
+            throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "AI provider is not configured");
+        }
     }
 
     private void validate(TestPlan plan) {
