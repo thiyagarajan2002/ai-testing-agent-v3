@@ -1,6 +1,6 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>com.thiyagarajan</groupId><artifactId>testing-agent</artifactId><version>3.30.0</version><name>AI Testing Agent</name>
+  <groupId>com.thiyagarajan</groupId><artifactId>testing-agent</artifactId><version>3.31.0</version><name>AI Testing Agent</name>
   <properties><maven.compiler.release>21</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding><junit.version>5.12.2</junit.version><playwright.version>1.55.0</playwright.version><restassured.version>5.5.6</restassured.version><jackson.version>2.20.0</jackson.version><slf4j.version>2.0.17</slf4j.version><commons.csv.version>1.14.1</commons.csv.version><itext.version>9.3.0</itext.version></properties>
   <dependencies>
     <dependency><groupId>com.microsoft.playwright</groupId><artifactId>playwright</artifactId><version>${playwright.version}</version></dependency>
