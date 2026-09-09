@@ -9,7 +9,7 @@ import com.thiyagarajan.agent.runtime.*;
 import java.util.*;
 
 public final class Main {
-    private static final String VERSION = "3.22.0";
+    private static final String VERSION = "3.26.0";
 
     private Main() {}
 
