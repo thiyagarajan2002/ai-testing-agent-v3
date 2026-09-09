@@ -2,34 +2,55 @@
 
 ## Current version
 
-**3.27.0 — Phase 6 Failure Intelligence & Smart Retry Guidance**
+**3.28.0 — Phase 7 Self-Healing & Adaptive Execution**
 
-AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama planning with REST Assured API execution, Playwright UI execution, data-driven testing, environment profiles, assertions, retries, failure artifacts, HTML/CSV/PDF reporting, suite execution, history/analytics, security redaction, CI automation, preflight validation and structured AI requirement intelligence.
+AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama planning with REST Assured API execution, Playwright UI execution, data-driven testing, environment profiles, assertions, bounded retries, failure artifacts, HTML/CSV/PDF reporting, suite execution, history/analytics, security redaction, CI automation, preflight validation and structured AI requirement intelligence.
 
-## v3.27.0 Failure Intelligence
+## v3.28.0 Self-Healing & Adaptive Execution
 
-Phase 6 adds a deterministic safety layer for failed executions before any optional AI-driven remediation.
+Phase 7 consumes deterministic failure intelligence without allowing unrestricted AI-controlled execution.
 
-### `FailureIntelligence`
+### `AdaptiveRetryPolicy`
 
-`FailureIntelligence.analyze(ExecutionResult)` classifies failed executions into `ASSERTION`, `TIMEOUT`, `AUTHENTICATION`, `NETWORK`, `LOCATOR`, `VALIDATION`, `SERVER` or `UNKNOWN`.
+`AdaptiveRetryPolicy.shouldRetry(...)` accepts only `RETRY` and `RETRY_WITH_BACKOFF` recommendations and requires a finite retry number within the configured retry budget. `delayMs(...)` calculates exponential backoff using 250 ms as the default base and 4000 ms as the hard cap.
 
-It returns a `RetryRecommendation`:
+This policy is deliberately side-effect free except for the explicit `sleep(...)` helper. It does not retry authentication, assertion, validation or locator-healing recommendations.
 
-- `RETRY` — safe candidate for a bounded retry.
-- `RETRY_WITH_BACKOFF` — likely transient timing/network/server failure.
-- `HEAL_LOCATOR` — UI selector failure is a candidate for selector healing/review.
-- `DO_NOT_RETRY` — authentication, assertion or validation failures should normally be corrected rather than blindly repeated.
+### `SelfHealingEngine`
 
-The classifier is deterministic and does not send execution data to an AI provider. This provides predictable behavior for CI quality gates and protects against unsafe retry loops.
+`SelfHealingEngine.heal(Page, originalLocator)` inspects conservative selector alternatives. A candidate is accepted only when Playwright reports exactly one matching element and that element is visible.
 
-### `AgentRunner.analyzeFailureIntelligence(ExecutionResult)`
+Current safe transformations:
 
-Exposes the deterministic recommendation through the main runtime orchestration layer. Existing `analyzeFailure(...)` remains the optional LLM-based natural-language failure analysis method.
+- `#id` → `[data-testid="id"]`
+- `#id` → `[name="id"]`
+- `#id` → `[aria-label="id"]`
+- `[data-testid="id"]` → `[id="id"]`
+- `[name="id"]` → `[id="id"]`
+
+Candidates include confidence and rationale. Broad XPath, text guessing and arbitrary DOM mutation are intentionally excluded.
+
+### `UiExecutor` healing flow
+
+When a UI step fails, `UiExecutor` first classifies the failure with `FailureIntelligence`. Only a `HEAL_LOCATOR` recommendation can invoke `SelfHealingEngine`. If a unique visible candidate is found, the same action is executed once with the candidate. Successful healing is recorded in the step details with original locator, healed locator, confidence and reason. If healing fails, the original failure path creates the normal screenshot and metadata artifacts.
+
+The test plan itself is not mutated, and no healing loop is allowed.
 
 ### Safety model
 
-Phase 6 does not automatically mutate locators or retry indefinitely. It produces a bounded recommendation that later self-healing/retry orchestration can consume. This separation keeps diagnosis deterministic and prevents an AI response from directly controlling unbounded execution.
+Phase 7 keeps execution bounded and auditable:
+
+1. Failure classification is deterministic.
+2. Retry requires an explicit finite budget.
+3. Backoff is capped.
+4. Locator healing is attempted at most once per failed step.
+5. Candidates must resolve to one visible element.
+6. Healing decisions are recorded in execution details.
+7. AI providers do not receive credentials or unrestricted control over selectors/retries.
+
+## v3.27.0 Failure Intelligence
+
+`FailureIntelligence.analyze(ExecutionResult)` classifies failed executions into `ASSERTION`, `TIMEOUT`, `AUTHENTICATION`, `NETWORK`, `LOCATOR`, `VALIDATION`, `SERVER` or `UNKNOWN` and returns bounded retry/healing guidance.
 
 ## v3.26.0 AI testing intelligence
 
@@ -62,11 +83,13 @@ The deterministic report package is exactly `report.html`, `report.csv` and `rep
 - `PromptManager` — planning, intelligence and failure-analysis prompts.
 - `AiIntelligenceResult` — structured AI scenarios, coverage, gaps and duplicate groups.
 - `FailureIntelligence` — deterministic failure classification and retry/healing recommendation.
+- `AdaptiveRetryPolicy` — bounded exponential backoff policy.
+- `SelfHealingEngine` — conservative unique-visible locator candidate engine.
 - `AgentRunner` — AI planning/intelligence, execution and failure-analysis coordination.
 - `TestPlanValidator` — shared API/UI preflight validation.
 - `ApiExecutor` — API execution, retries, variables and evidence.
 - `ApiAssertionEngine` — API assertions.
-- `UiExecutor` — Playwright execution, waits, assertions and screenshots.
+- `UiExecutor` — Playwright execution, waits, assertions, screenshots and safe locator healing.
 - `TestOrchestrator` — configuration-aware orchestration entry point.
 - `SuiteExecutionEngine` — suite execution and aggregation.
 - `DataDrivenRunner` — dataset-driven execution.
