@@ -1,5 +1,6 @@
 package com.thiyagarajan.agent.io;
 
+import com.thiyagarajan.agent.runtime.RunContext;
 import com.thiyagarajan.agent.runtime.SecurityRedactor;
 
 import java.io.ByteArrayOutputStream;
@@ -17,6 +18,7 @@ import java.util.Locale;
 /** Creates durable, redacted terminal logs while preserving live terminal output. */
 public final class RunLogManager implements AutoCloseable {
     private final Path logFile;
+    private final String runId;
     private final PrintStream originalOut;
     private final PrintStream originalErr;
     private final PrintStream filePrint;
@@ -25,8 +27,9 @@ public final class RunLogManager implements AutoCloseable {
     private final PrintStream teeErr;
     private boolean closed;
 
-    private RunLogManager(Path logFile, PrintStream originalOut, PrintStream originalErr) throws IOException {
+    private RunLogManager(Path logFile, String runId, PrintStream originalOut, PrintStream originalErr) throws IOException {
         this.logFile = logFile;
+        this.runId = runId;
         this.originalOut = originalOut;
         this.originalErr = originalErr;
         Files.createDirectories(logFile.getParent());
@@ -38,31 +41,37 @@ public final class RunLogManager implements AutoCloseable {
         this.teeErr = new TeePrintStream(originalErr, fileOutput);
         System.setOut(teeOut);
         System.setErr(teeErr);
-        log("=== AI Testing Agent run started ===");
+        log("=== AI Testing Agent run started === runId=" + runId);
     }
 
     public static RunLogManager start(String reportsDir, String area, String command) throws IOException {
+        return start(reportsDir, area, command, RunContext.currentRunId().isBlank() ? RunContext.newRunId() : RunContext.currentRunId());
+    }
+
+    public static RunLogManager start(String reportsDir, String area, String command, String runId) throws IOException {
         String safeArea = safe(area, "terminal");
         String safeCommand = safe(command, "run");
+        String safeRunId = safe(runId, "run-unknown");
         String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS", Locale.ROOT)
                 .withZone(java.time.ZoneId.systemDefault()).format(Instant.now());
         Path file = Path.of(reportsDir, safeArea, "logs",
-                "terminal-" + timestamp + "-" + safeCommand + ".log").toAbsolutePath().normalize();
-        return new RunLogManager(file, System.out, System.err);
+                "terminal-" + timestamp + "-" + safeCommand + "-" + safeRunId + ".log").toAbsolutePath().normalize();
+        return new RunLogManager(file, safeRunId, System.out, System.err);
     }
 
     public synchronized void log(String message) {
         if (closed) return;
-        teeOut.println("[" + Instant.now() + "] " + (message == null ? "" : message));
+        teeOut.println("[" + Instant.now() + "] [runId=" + runId + "] " + (message == null ? "" : message));
     }
 
     public Path logFile() { return logFile; }
+    public String runId() { return runId; }
 
     @Override
     public synchronized void close() throws IOException {
         if (closed) return;
         try {
-            teeOut.println("[" + Instant.now() + "] === AI Testing Agent run finished ===");
+            teeOut.println("[" + Instant.now() + "] [runId=" + runId + "] === AI Testing Agent run finished ===");
             teeOut.flush();
             teeErr.flush();
             fileOutput.flush();
@@ -83,21 +92,11 @@ public final class RunLogManager implements AutoCloseable {
     private static final class TeePrintStream extends PrintStream {
         TeePrintStream(PrintStream console, OutputStream file) throws IOException {
             super(new OutputStream() {
-                @Override public synchronized void write(int b) throws IOException {
-                    console.write(b);
-                    file.write(b);
-                }
-                @Override public synchronized void write(byte[] b, int off, int len) throws IOException {
-                    console.write(b, off, len);
-                    file.write(b, off, len);
-                }
-                @Override public synchronized void flush() throws IOException {
-                    console.flush();
-                    file.flush();
-                }
+                @Override public synchronized void write(int b) throws IOException { console.write(b); file.write(b); }
+                @Override public synchronized void write(byte[] b, int off, int len) throws IOException { console.write(b, off, len); file.write(b, off, len); }
+                @Override public synchronized void flush() throws IOException { console.flush(); file.flush(); }
             }, true, StandardCharsets.UTF_8);
         }
-
         @Override public void close() { flush(); }
     }
 
@@ -105,36 +104,14 @@ public final class RunLogManager implements AutoCloseable {
     private static final class RedactingLineOutputStream extends OutputStream {
         private final OutputStream target;
         private final ByteArrayOutputStream line = new ByteArrayOutputStream();
-
-        RedactingLineOutputStream(OutputStream target) {
-            this.target = target;
-        }
-
-        @Override
-        public synchronized void write(int b) throws IOException {
-            line.write(b);
-            if (b == '\n') flushLine();
-        }
-
-        @Override
-        public synchronized void write(byte[] b, int off, int len) throws IOException {
+        RedactingLineOutputStream(OutputStream target) { this.target = target; }
+        @Override public synchronized void write(int b) throws IOException { line.write(b); if (b == '\n') flushLine(); }
+        @Override public synchronized void write(byte[] b, int off, int len) throws IOException {
             line.write(b, off, len);
             int end = off + len;
-            for (int i = off; i < end; i++) {
-                if (b[i] == '\n') {
-                    flushLine();
-                    if (i + 1 < end) line.write(b, i + 1, end - i - 1);
-                    return;
-                }
-            }
+            for (int i = off; i < end; i++) if (b[i] == '\n') { flushLine(); if (i + 1 < end) line.write(b, i + 1, end - i - 1); return; }
         }
-
-        @Override
-        public synchronized void flush() throws IOException {
-            if (line.size() > 0) flushLine();
-            target.flush();
-        }
-
+        @Override public synchronized void flush() throws IOException { if (line.size() > 0) flushLine(); target.flush(); }
         private void flushLine() throws IOException {
             String redacted = SecurityRedactor.redactText(line.toString(StandardCharsets.UTF_8));
             target.write(redacted.getBytes(StandardCharsets.UTF_8));
