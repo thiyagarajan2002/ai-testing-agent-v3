@@ -2,66 +2,50 @@
 
 All notable project changes are documented here at release level. The complete implementation history and method-level details remain in `PROJECT_DETAILS.md`.
 
+## 3.27.0
+
+- Added deterministic `FailureIntelligence` for classifying execution failures.
+- Added categories for assertion, timeout, authentication, network, locator, validation, server and unknown failures.
+- Added bounded retry recommendations: retry, retry with backoff, do not retry and locator healing.
+- Added `AgentRunner.analyzeFailureIntelligence(...)` for programmatic access to recommendations.
+- Kept recommendations deterministic and independent of the LLM to prevent unsafe/unbounded AI-controlled retries.
+- Added regression tests for timeout, authentication and locator classifications.
+- Updated complete project documentation and Maven version to 3.27.0.
+
 ## 3.26.0
 
 - Added provider-neutral `AiProvider` abstraction and made `OllamaClient` implement it.
 - Added structured `AiIntelligenceResult` for requirement summaries, generated scenarios, coverage, missing-test detection and duplicate groups.
-- Added `PromptManager.intelligencePrompt(...)` for multi-scenario positive, negative, boundary, authentication, validation and resilience test generation.
-- Added `AgentRunner.intelligence(...)` with strict scenario-ID, embedded-plan, coverage-reference and duplicate-reference validation.
-- Exposed structured intelligence through `TestOrchestrator.intelligence(...)`.
-- Added regression tests with deterministic injected AI responses, including invalid coverage and duplicate scenario IDs.
-- Aligned `TestPlanValidator` with actual Phase 3 API actions (`HEAD`, `OPTIONS`) and Phase 4 UI actions/assertions/waits.
-- Added strict locator preflight validation for locator-dependent UI actions and numeric validation for timed waits.
-- Updated Maven and CLI version metadata to 3.26.0.
-- Updated README and complete project documentation for Phase 5.
+- Added multi-scenario positive, negative, boundary, authentication, validation and resilience generation.
+- Added `AgentRunner.intelligence(...)` and `TestOrchestrator.intelligence(...)` with strict validation.
+- Added regression tests with deterministic injected AI responses.
+- Aligned `TestPlanValidator` with Phase 3 API and Phase 4 UI action contracts.
+- Updated Maven and documentation to 3.26.0.
 
 ## 3.25.0
 
 - Hardened Playwright browser/context lifecycle with guaranteed cleanup.
-- Added `DOMContentLoaded` navigation waiting instead of fixed post-navigation sleeps.
-- Added UI actions for hover, check and uncheck while preserving existing actions.
-- Added page title and URL assertions.
-- Added locator state waits: `waitforvisible` and `waitforhidden`.
-- Kept legacy timed `waitfor` support for backward compatibility.
-- Added explicit locator validation for locator-dependent actions.
-- Preserved per-step timeout overrides and default timeout configuration.
-- Continued automatic full-page screenshots after successful UI steps and failure screenshots/metadata for failed steps.
-- Applied security redaction to UI exception details stored in execution results.
-- Updated README and complete project documentation.
-- Bumped the application/Maven version to 3.25.0.
+- Added `DOMContentLoaded` navigation waiting and locator state waits.
+- Added hover, check, uncheck, title/URL assertions and automatic screenshots.
+- Applied security redaction to UI failure details.
 
 ## 3.24.0
 
 - Expanded API execution to GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS.
-- Added explicit request `contentType` support and URL-encoded form parameters.
-- Added bearer, preemptive basic, API-key-header and API-key-query authentication.
-- Preserved variable substitution across request components and authentication values.
-- Added XMLPath existence/equality assertions alongside JSONPath, header, body, status and response-time assertions.
-- Preserved legacy assertions, response-variable extraction and retry behavior.
-- Added local HTTP-server regression coverage for API authentication, JSON requests, form requests and assertions.
+- Added forms, authentication, JSONPath/XMLPath assertions and response-variable extraction.
 
 ## 3.23.0
 
-- Standardized the deterministic three-file report package: `report.html`, `report.csv`, `report.pdf`.
-- Added `ReportIntegrityValidator` for exact file-set and artifact validation.
-- Added regression coverage for complete, incomplete, unexpected-file and invalid-PDF packages.
-- Standardized color-coded PDF reporting and unified report-source behavior.
+- Standardized the three-file report package and added report integrity validation.
 
 ## 3.22.0
 
-- Hardened execution stability, configuration bounds, standardized errors and durable CLI logging.
-- Added secure UTF-8 redaction to persisted stdout/stderr.
-- Added regression coverage for configuration bounds, log redaction, Unicode preservation and execution-result serialization.
-- Added CI shell syntax validation and corrected JSON fixture validation for array-based datasets.
+- Hardened stability, configuration bounds, standardized errors and secure durable logging.
 
 ## 3.21.0
 
-- Expanded API/UI/suite/data-driven examples.
-- Added automatic UI screenshots, durable API logs and terminal run logs.
-- Unified execution reporting into HTML, CSV and PDF generated from the same `ExecutionResult`.
+- Expanded API/UI/suite/data-driven examples, screenshots, logs and unified reporting.
 
 ## 3.20.0
 
 - Standardized repository organization and engineering support documentation.
-- Established documented target package architecture.
-- Fixed suite plan path validation and added security regression coverage.
