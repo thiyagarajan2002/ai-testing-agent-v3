@@ -2,9 +2,90 @@
 
 ## Current version
 
-**3.25.0 — Phase 4 UI Testing Enhancement**
+**3.26.0 — Phase 5 AI Testing Intelligence**
 
-AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama planning with REST Assured API execution, Playwright UI execution, JSON/CSV data-driven testing, environment profiles, assertions, retries, failure artifacts, HTML/CSV/PDF reporting, suite execution, history/analytics, security redaction, CI automation and preflight validation.
+AI Testing Agent is a Java 21 automation framework for AI-assisted API and UI test planning/execution. It combines Ollama planning with REST Assured API execution, Playwright UI execution, JSON/CSV data-driven testing, environment profiles, assertions, retries, failure artifacts, HTML/CSV/PDF reporting, suite execution, history/analytics, security redaction, CI automation, preflight validation and structured AI requirement intelligence.
+
+## v3.26.0 AI testing intelligence
+
+Phase 5 adds a structured requirement-to-test intelligence workflow on top of the existing single-plan AI planner.
+
+### `AiProvider`
+
+`AiProvider` is a minimal functional interface with `generate(String prompt)`. It separates AI orchestration from any specific model provider and allows tests to inject deterministic provider responses without running Ollama.
+
+`OllamaClient` now implements `AiProvider`. Existing Ollama behavior is preserved, with added validation for blank base URL, model name and prompts.
+
+### `PromptManager.intelligencePrompt(String requirement)`
+
+Builds the Phase 5 structured intelligence prompt. The expected response contains:
+
+- requirement summary
+- multiple generated scenarios
+- scenario ID, title, category, priority and objective
+- one executable `TestPlan` per scenario
+- requirement-to-test coverage mappings
+- missing high-value tests
+- duplicate scenario groups
+
+Supported scenario categories are `positive`, `negative`, `boundary`, `authentication`, `validation` and `resilience`. The prompt explicitly prohibits invented credentials or secrets and instructs the model to use placeholders such as `${token}`.
+
+### `AiIntelligenceResult`
+
+Top-level model returned by Phase 5.
+
+Fields:
+
+- `summary` — concise requirement interpretation
+- `scenarios` — generated executable scenarios
+- `coverage` — atomic requirement clauses mapped to scenario IDs
+- `missingTests` — important uncovered scenarios
+- `duplicateGroups` — groups of redundant generated scenario IDs
+
+Each `Scenario` contains `id`, `title`, `category`, `priority`, `objective` and an embedded `TestPlan`.
+
+### `AgentRunner.intelligence(String requirement)`
+
+Generates and validates the structured AI package. Validation rejects:
+
+- blank requirements
+- missing AI provider
+- empty AI responses
+- no generated scenarios
+- blank or duplicate scenario IDs
+- scenarios without executable plans
+- embedded plans that fail `TestPlanValidator`
+- coverage mappings that reference unknown scenario IDs
+- duplicate groups that reference unknown scenario IDs
+
+The existing `plan(String requirement)` method remains backward-compatible for single-plan generation.
+
+### `TestOrchestrator.intelligence(String requirement)`
+
+Exposes the Phase 5 workflow through the project orchestration layer. Applications can call it without bypassing the existing configuration/provider setup.
+
+Programmatic example:
+
+```java
+try (TestOrchestrator orchestrator = new TestOrchestrator(Config.load(), new ObjectMapper(), null)) {
+    AiIntelligenceResult intelligence = orchestrator.intelligence(requirementText);
+    for (AiIntelligenceResult.Scenario scenario : intelligence.scenarios) {
+        System.out.println(scenario.id + " | " + scenario.category + " | " + scenario.priority);
+        TestPlan executable = scenario.plan;
+    }
+}
+```
+
+### Shared validation alignment
+
+Phase 5 exposed an older shared-validator mismatch. `TestPlanValidator` has now been aligned with the actual executors:
+
+- API actions: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
+- UI actions: navigate, click, fill, press, selectOption, hover, check, uncheck, assertVisible, assertText, assertValue, assertTitle, assertUrl, waitFor, waitForVisible, waitForHidden, screenshot
+- locator-required UI actions now fail preflight when no locator is supplied
+- `waitFor` values are validated as non-negative milliseconds
+
+This ensures generated Phase 5 plans use the same action contract as Phase 3 and Phase 4 execution.
 
 ## v3.25.0 UI execution
 
@@ -39,25 +120,6 @@ After every successful step, a full-page screenshot is attempted and attached to
 ### UI diagnostics and security
 
 Exception text stored in execution results is passed through `SecurityRedactor`. Failure metadata is created through the existing `FailureArtifactManager`, preserving the project's persisted-evidence security model.
-
-Example:
-
-```json
-{
-  "name": "Login smoke",
-  "type": "UI",
-  "baseUrl": "https://example.com",
-  "steps": [
-    { "action": "navigate", "value": "/login" },
-    { "action": "waitforvisible", "locator": "#username" },
-    { "action": "fill", "locator": "#username", "value": "demo" },
-    { "action": "fill", "locator": "#password", "value": "${PASSWORD}" },
-    { "action": "click", "locator": "button[type=submit]" },
-    { "action": "assertvisible", "locator": ".dashboard" },
-    { "action": "asserttitle", "value": "Dashboard" }
-  ]
-}
-```
 
 ## v3.24.0 API execution
 
@@ -112,12 +174,18 @@ mvn -B -DskipTests compile exec:java@playwright-cli -Dexec.args="install chromiu
 ## Core classes
 
 - `Main` — CLI entry point and durable terminal-log lifecycle.
-- `AgentRunner` — AI planning, validation and execution coordination.
+- `AiProvider` — provider-neutral AI generation contract.
+- `OllamaClient` — Ollama implementation of `AiProvider`.
+- `PromptManager` — single-plan, structured-intelligence and failure-analysis prompts.
+- `AiIntelligenceResult` — generated scenarios, coverage, gaps and duplicate groups.
+- `AgentRunner` — AI planning/intelligence, validation, execution and failure-analysis coordination.
 - `TestPlan` — test name, type, base URL, variables and steps.
 - `TestStep` — API/UI action model, request data, authentication, retries and assertions.
+- `TestPlanValidator` — non-executing shared API/UI plan validation.
 - `ApiExecutor` — API request execution, retries, variable extraction and evidence.
 - `ApiAssertionEngine` — API status/body/header/JSON/XML/performance assertions.
 - `UiExecutor` — Playwright browser/context/page execution, waits, actions, assertions and screenshots.
+- `TestOrchestrator` — configuration-aware entry point for plan, suite, data-driven and AI intelligence workflows.
 - `SuiteExecutionEngine` — suite loading, validation, parallel workers and aggregation.
 - `DataDrivenRunner` — dataset-driven execution and metrics.
 - `ReportManager` — unified HTML/CSV/PDF report generation.
