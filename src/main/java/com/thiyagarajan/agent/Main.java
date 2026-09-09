@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import java.util.*;
 
 public final class Main {
-    private static final String VERSION = "3.31.0";
+    private static final String VERSION = "3.32.0";
     private Main() {}
 
     public static void main(String[] a) {
@@ -48,14 +48,12 @@ public final class Main {
         List<RunHistoryManager.RunSummary> all = mapper.readValue(indexFile.toFile(), new com.fasterxml.jackson.core.type.TypeReference<List<RunHistoryManager.RunSummary>>() {});
         System.out.println("=== Execution History ===");
         all.stream().skip(Math.max(0, all.size() - limit)).forEach(r -> System.out.println(r.runId + " | " + r.suiteName + " | " + r.status + " | " + r.passRate + "% | " + r.durationMs + " ms | regressions=" + r.regressions + " | fixed=" + r.fixed));
-        int analysisLimit = Math.max(limit, 1); var analytics = new HistoryAnalyticsManager(root).analyze(analysisLimit, HistoryAnalyticsManager.DEFAULT_FLAKY_THRESHOLD);
-        var trends = new TrendAnalyticsManager(root).writeReports(analysisLimit);
+        int analysisLimit = Math.max(limit, 1); var analytics = new HistoryAnalyticsManager(root).analyze(analysisLimit, HistoryAnalyticsManager.DEFAULT_FLAKY_THRESHOLD); var trends = new TrendAnalyticsManager(root).writeReports(analysisLimit);
         System.out.println("Runs analyzed: " + analytics.runsAnalyzed + " | Tests observed: " + analytics.totalTestsObserved + " | Flaky: " + analytics.flakyTests.size());
         System.out.println("Trend: pass-rate delta=" + String.format(Locale.ROOT, "%.2f pp", trends.passRateDelta) + " | duration delta=" + trends.durationDeltaMs + " ms | regressions=" + trends.regressionTotal);
         System.out.println("History dashboard: " + root.resolve("index.html")); System.out.println("Analytics dashboard: " + root.resolve("analytics.html")); System.out.println("Trend dashboard: " + root.resolve("trends.html"));
         return 0;
     }
-
     private static int optionInt(String[] a, String name, int fallback) { String value = option(a, name); if (value == null) return fallback; try { int n = Integer.parseInt(value); if (n < 1 || n > 1000) throw new IllegalArgumentException(name + " must be between 1 and 1000"); return n; } catch (NumberFormatException e) { throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, name + " must be an integer: " + value, e); } }
     private static String logArea(String[] a) { if (a.length == 0) return "terminal"; if ("interactive".equalsIgnoreCase(a[0])) return "ui"; if ("history".equalsIgnoreCase(a[0])) return "history"; if ("plan".equalsIgnoreCase(a[0]) || "suite".equalsIgnoreCase(a[0]) || "data-driven".equalsIgnoreCase(a[0]) || ("validate".equalsIgnoreCase(a[0]) && a.length > 1 && "plan".equalsIgnoreCase(a[1]))) return "api"; return "terminal"; }
     private static Map<String, String> filters(String[] a) { Map<String, String> f = new LinkedHashMap<>(); for (int i = 0; i < a.length - 1; i++) if ("--filter".equalsIgnoreCase(a[i])) { String[] p = a[i + 1].split("=", 2); if (p.length != 2 || p[0].isBlank()) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Filter must use key=value"); f.put(p[0], p[1]); } return f; }
