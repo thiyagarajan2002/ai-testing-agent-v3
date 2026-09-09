@@ -2,6 +2,7 @@ package com.thiyagarajan.agent.runtime;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class ExecutionResult {
     public String runId = "";
@@ -20,13 +21,13 @@ public class ExecutionResult {
     public void ensureIdentity() {
         if (runId.isBlank()) runId = RunContext.currentRunId();
         if (testId.isBlank() && !runId.isBlank()) testId = runId + "-test-1";
-        if (!runId.isBlank()) {
-            for (int i = 0; i < steps.size(); i++) {
-                if (steps.get(i) != null && steps.get(i).stepId.isBlank()) {
-                    steps.get(i).stepId = runId + "-test-1-step-" + (i + 1);
-                }
-            }
+        for (StepResult step : steps) {
+            if (step != null && step.stepId.isBlank()) step.stepId = newStepId();
         }
+    }
+
+    private static String newStepId() {
+        return "step-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     }
 
     public boolean passed() { return passed; }
@@ -50,6 +51,7 @@ public class ExecutionResult {
             this.passed = passed;
             this.details = SecurityRedactor.redactText(details);
             this.durationMs = durationMs;
+            this.stepId = newStepId();
         }
 
         public StepResult(String action, boolean passed, String details, long durationMs, List<String> artifacts) {
