@@ -1,6 +1,31 @@
-# AI Testing Agent — v3.32.0
+# AI Testing Agent — v3.33.0
 
-AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, bounded retries, safe locator healing, healing history, artifacts, reporting, suites, execution history/analytics, trend analysis, security redaction, preflight validation, data-driven execution and structured AI test intelligence.
+AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, bounded retries, safe locator healing, healing history, retry history, artifacts, reporting, suites, execution history/analytics, trend analysis, security redaction, preflight validation, data-driven execution and structured AI test intelligence.
+
+## v3.33.0 — Smart Retry v2
+
+Phase 11 strengthens transient-failure retry behavior with explicit budgets and auditable retry history.
+
+- **Category-aware retry:** retries are permitted only for `RETRY` and `RETRY_WITH_BACKOFF` recommendations.
+- **No unsafe retries:** assertion, authentication, validation and locator-healing failures are not automatically retried by the retry policy.
+- **Exponential backoff:** delays start at 250 ms and are capped at 4000 ms.
+- **Retry budget:** every retry decision is bounded by the configured maximum retry count.
+- **Retry history:** retry decisions and recovery outcomes are persisted under `reports/retries/history.json`.
+- **Correlation:** retry history records run ID, test, action, retry number and failure category.
+- **Security:** persisted rationale and identifiers pass through the existing redaction boundary.
+- **Regression coverage:** retry-history persistence is covered by JUnit.
+
+### Retry policy
+
+`AdaptiveRetryPolicy` remains deterministic and bounded:
+
+```text
+retry 1 -> 250 ms
+retry 2 -> 500 ms
+retry 3 -> 1000 ms
+retry 4 -> 2000 ms
+retry 5+ -> 4000 ms maximum
+```
 
 ## v3.32.0 — AI Self-Healing v2
 
@@ -9,33 +34,16 @@ Phase 10 strengthens UI locator healing with explicit safety boundaries, evidenc
 - **Confidence threshold:** only candidates meeting the default 0.90 confidence threshold are eligible.
 - **Evidence capture:** each evaluated candidate records match count, visibility, confidence and reason.
 - **Uniqueness gate:** a healed selector must resolve to exactly one visible element.
-- **Conservative candidates:** healing remains limited to selectors deterministically derived from the original locator; broad XPath/text guessing is not used.
-- **Failure evidence:** unsuccessful healing attempts include candidate evidence in step details and failure metadata.
-- **Healing history:** successful healing decisions are persisted under `reports/healing/history.json` with run/test/action correlation.
-- **Security:** locator/reason evidence passes through the existing report/log redaction boundary.
-- **Regression coverage:** confidence, candidate generation and healing-history persistence are covered by JUnit.
+- **Conservative candidates:** healing remains limited to selectors deterministically derived from the original locator.
+- **Healing history:** successful healing decisions are persisted under `reports/healing/history.json`.
 
 ## v3.31.0 — Report Comparison & Trend Analysis
 
-Phase 9 extends execution history into a trend-oriented reporting layer.
-
-- **Pass-rate trends:** compare the first and latest analyzed runs in percentage points.
-- **Duration trends:** track execution-duration delta and peak duration across runs.
-- **Regression trends:** aggregate regressions across the selected history window.
-- **Trend artifacts:** `reports/history/trends.json`, `trends.csv` and `trends.html` are generated from persisted history.
-- **Report navigation:** trend rows link directly to each run's `comparison.html`.
-- **CLI:** `history [--limit N]` generates and prints the trend dashboard location.
+Phase 9 extends execution history into a trend-oriented reporting layer with pass-rate, duration, regression and historical analytics trends.
 
 ## v3.30.0 — Execution History
 
 Phase 8 formalizes persistent suite execution history, historical comparison and analytics.
-
-- **Persistent history:** suite executions are stored under `reports/history/<run-id>/`.
-- **Run index:** `reports/history/index.json` keeps a compact chronological summary.
-- **Run artifacts:** each recorded suite run contains `suite-execution.json`, `comparison.json`, `comparison.csv` and `comparison.html`.
-- **Historical comparison:** regressions, fixed tests, new tests, removed tests and unchanged results are identified.
-- **Analytics:** historical analytics identify flaky tests and slowest tests.
-- **Dashboards:** `index.html` provides history navigation and `analytics.html` provides historical analytics.
 
 ## v3.29.0 — Run ID & Correlation ID
 
@@ -44,11 +52,3 @@ Phase 7 introduced unique Run IDs propagated through terminal logs and execution
 ## v3.28.0 — Phase 7 Self-Healing & Adaptive Execution
 
 Phase 7 adds bounded adaptive retry behavior and conservative UI locator healing.
-
-## v3.27.0 — Phase 6 Failure Intelligence & Smart Retry Guidance
-
-Phase 6 adds deterministic failure classification for assertion, timeout, authentication, network, locator, validation, server and unknown failures.
-
-## v3.26.0 — Phase 5 AI Testing Intelligence
-
-Phase 5 adds requirement summaries, positive/negative/boundary/authentication/validation/resilience scenarios, priorities, executable plans, requirement coverage, missing-test detection, duplicate groups and provider abstraction.
