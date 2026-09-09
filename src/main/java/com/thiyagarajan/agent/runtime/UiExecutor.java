@@ -3,6 +3,7 @@ package com.thiyagarajan.agent.runtime;
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import com.microsoft.playwright.options.WaitUntilState;
+import com.thiyagarajan.agent.ai.FailureIntelligence;
 import com.thiyagarajan.agent.config.Config;
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestStep;
@@ -12,7 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
-/** Executes UI plans with resilient Playwright waits, assertions and evidence. */
+/** Executes UI plans with resilient waits, bounded locator healing and evidence. */
 public class UiExecutor {
     private final Config config;
     private final FailureArtifactManager artifacts;
@@ -39,19 +40,40 @@ public class UiExecutor {
                     TestStep step = plan.steps.get(index);
                     long start = System.currentTimeMillis();
                     try {
-                        executeStep(page, plan, step);
+                        executeStep(page, plan, step, step.locator);
                         Path screenshot = captureStep(page, plan.name, index, step.action);
                         result.steps.add(new ExecutionResult.StepResult(step.action, true,
                                 "OK; screenshot=" + (screenshot == null ? "unavailable" : screenshot),
                                 System.currentTimeMillis() - start,
                                 screenshot == null ? List.of() : List.of(screenshot.toString())));
-                    } catch (Exception e) {
+                    } catch (Exception firstFailure) {
+                        FailureIntelligence.Analysis analysis = classify(firstFailure);
+                        SelfHealingEngine.HealingResult healing = analysis.recommendation() == FailureIntelligence.RetryRecommendation.HEAL_LOCATOR
+                                ? SelfHealingEngine.heal(page, step.locator) : new SelfHealingEngine.HealingResult(step.locator, null, 0.0, "Healing not applicable");
+                        if (healing.healed()) {
+                            try {
+                                executeStep(page, plan, step, healing.healedLocator());
+                                Path screenshot = captureStep(page, plan.name, index, step.action);
+                                String details = "HEALED; originalLocator=" + safe(step.locator) + "; healedLocator=" + safe(healing.healedLocator())
+                                        + "; confidence=" + healing.confidence() + "; reason=" + healing.reason()
+                                        + "; screenshot=" + (screenshot == null ? "unavailable" : screenshot);
+                                result.steps.add(new ExecutionResult.StepResult(step.action, true, details,
+                                        System.currentTimeMillis() - start,
+                                        screenshot == null ? List.of() : List.of(screenshot.toString())));
+                                continue;
+                            } catch (Exception healedFailure) {
+                                firstFailure = healedFailure;
+                            }
+                        }
                         result.passed = false;
                         Path screenshot = captureFailure(page, plan.name, index);
-                        Path metadata = artifacts.createFailureMetadata(plan.name, index, step.action, e.toString());
+                        String details = SecurityRedactor.redactText(firstFailure.toString());
+                        if (healing.healed()) details += "; healingAttempted=true; originalLocator=" + safe(step.locator)
+                                + "; healedLocator=" + safe(healing.healedLocator()) + "; confidence=" + healing.confidence();
+                        Path metadata = artifacts.createFailureMetadata(plan.name, index, step.action, details);
                         List<String> files = screenshot == null ? List.of(metadata.toString()) : List.of(screenshot.toString(), metadata.toString());
-                        result.steps.add(new ExecutionResult.StepResult(step.action, false,
-                                SecurityRedactor.redactText(e.toString()), System.currentTimeMillis() - start, files));
+                        result.steps.add(new ExecutionResult.StepResult(step.action, false, details,
+                                System.currentTimeMillis() - start, files));
                         break;
                     }
                 }
@@ -67,6 +89,13 @@ public class UiExecutor {
         return result;
     }
 
+    private FailureIntelligence.Analysis classify(Exception failure) {
+        ExecutionResult failed = new ExecutionResult();
+        failed.passed = false;
+        failed.steps.add(new ExecutionResult.StepResult("ui", false, failure.toString(), 0));
+        return FailureIntelligence.analyze(failed);
+    }
+
     private void validate(TestPlan plan) {
         if (plan == null) throw new IllegalArgumentException("UI plan cannot be null");
         if (plan.steps == null || plan.steps.isEmpty()) throw new IllegalArgumentException("UI plan contains no steps");
@@ -77,11 +106,11 @@ public class UiExecutor {
         }
     }
 
-    private void executeStep(Page page, TestPlan plan, TestStep step) {
+    private void executeStep(Page page, TestPlan plan, TestStep step, String locatorOverride) {
         if (step.timeoutMs > 0) page.setDefaultTimeout(step.timeoutMs);
         String action = step.action.toLowerCase(Locale.ROOT);
         String value = step.value == null ? "" : step.value;
-        String locator = step.locator == null ? "" : step.locator;
+        String locator = locatorOverride == null ? "" : locatorOverride;
         Locator target = locator.isBlank() ? null : page.locator(locator);
         switch (action) {
             case "navigate" -> page.navigate(resolve(plan.baseUrl, value), new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
@@ -118,6 +147,7 @@ public class UiExecutor {
         if (value.startsWith("http://") || value.startsWith("https://")) return value;
         return base.replaceAll("/$", "") + "/" + value.replaceFirst("^/", "");
     }
+    private String safe(String value) { return SecurityRedactor.redactText(value == null ? "" : value); }
     private Path captureStep(Page page, String testName, int index, String action) {
         try {
             Path dir = Path.of(config.reportsDir(), config.screenshotsDir(), "ui", FailureArtifactManager.safe(testName, "test"));
