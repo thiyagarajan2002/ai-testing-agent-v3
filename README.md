@@ -1,6 +1,36 @@
-# AI Testing Agent — v3.25.0
+# AI Testing Agent — v3.26.0
 
-AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, retries, artifacts, reporting, suites, history/analytics, security redaction, preflight validation and data-driven execution.
+AI-assisted API/UI testing framework using Java 21, Ollama, REST Assured, Playwright, environment profiles, assertions, retries, artifacts, reporting, suites, history/analytics, security redaction, preflight validation, data-driven execution and structured AI test intelligence.
+
+## v3.26.0 — Phase 5 AI Testing Intelligence
+
+Phase 5 upgrades requirement-to-test generation from a single plan into a structured QA intelligence package.
+
+- **Requirement analysis:** converts natural-language requirements into a concise test summary.
+- **Multi-scenario generation:** produces several distinct executable scenarios instead of only one plan.
+- **Scenario categories:** supports positive, negative, boundary, authentication, validation and resilience coverage.
+- **Priority classification:** critical, high, medium and low scenario priorities.
+- **Executable output:** every scenario embeds a standard `TestPlan` that is validated before it is accepted.
+- **Requirement traceability:** maps atomic requirement clauses to generated scenario IDs.
+- **Missing-test detection:** explicitly reports important high-value scenarios that are still uncovered.
+- **Duplicate detection:** identifies substantively redundant generated scenario groups.
+- **Provider abstraction:** `AiProvider` decouples AI intelligence from Ollama and makes the AI layer unit-testable.
+- **Safety:** prompts prohibit invented credentials/secrets and prefer placeholders such as `${token}`.
+- **Cross-phase validation fix:** shared preflight validation now accepts Phase 3 `HEAD`/`OPTIONS` and all Phase 4 UI actions/waits/assertions.
+
+Programmatic usage:
+
+```java
+try (TestOrchestrator orchestrator = new TestOrchestrator(Config.load(), new ObjectMapper(), null)) {
+    AiIntelligenceResult intelligence = orchestrator.intelligence(requirementText);
+    intelligence.scenarios.forEach(s -> {
+        System.out.println(s.id + " | " + s.category + " | " + s.priority);
+        System.out.println(s.plan.name);
+    });
+}
+```
+
+The existing `interactive` mode continues to generate and execute a single AI plan. Phase 5 adds the richer `intelligence(...)` API for requirement analysis and multi-scenario generation without changing existing execution behavior.
 
 ## v3.25.0 — Phase 4 UI Testing Enhancement
 
@@ -134,10 +164,11 @@ mvn exec:java -Dexec.args="interactive"
 
 ## Security
 
-Do not store production credentials in plans or datasets. Authentication and sensitive execution diagnostics are protected by the existing redaction/logging pipeline.
+Do not store production credentials in plans or datasets. Authentication and sensitive execution diagnostics are protected by the existing redaction/logging pipeline. AI prompts must use placeholders for credentials rather than inventing or embedding secrets.
 
 ## Version history
 
+- **v3.26.0** — Phase 5 AI testing intelligence: multi-scenario generation, requirement coverage, gap detection, duplicate detection and provider abstraction
 - **v3.25.0** — Phase 4 UI testing enhancement: Playwright lifecycle, event-oriented waits, actions, assertions and evidence hardening
 - **v3.24.0** — Phase 3 API testing enhancement
 - **v3.23.0** — Phase 2 reporting standardization and report package integrity validation
