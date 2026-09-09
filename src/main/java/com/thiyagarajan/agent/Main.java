@@ -11,20 +11,15 @@ import java.nio.file.Path;
 import java.util.*;
 
 public final class Main {
-    private static final String VERSION = "3.30.0";
+    private static final String VERSION = "3.31.0";
     private Main() {}
 
     public static void main(String[] a) {
-        String[] args = a == null ? new String[0] : a;
-        int exitCode = 0;
+        String[] args = a == null ? new String[0] : a; int exitCode = 0;
         try {
-            Config config = Config.load();
-            String area = logArea(args);
-            String command = args.length == 0 ? "help" : args[0];
+            Config config = Config.load(); String area = logArea(args); String command = args.length == 0 ? "help" : args[0];
             try (RunContext context = RunContext.start(); RunLogManager logs = RunLogManager.start(config.reportsDir(), area, command, context.runId())) {
-                logs.log("Run ID: " + context.runId());
-                logs.log("Command: " + String.join(" ", args));
-                logs.log("Terminal output is captured to: " + logs.logFile());
+                logs.log("Run ID: " + context.runId()); logs.log("Command: " + String.join(" ", args)); logs.log("Terminal output is captured to: " + logs.logFile());
                 try { exitCode = run(args); }
                 catch (AgentExecutionException e) { logs.log("Agent error [" + e.category() + "]: " + e.getMessage()); e.printStackTrace(System.err); exitCode = 2; }
                 catch (Exception e) { logs.log("Agent error [INFRASTRUCTURE]: " + e.getMessage()); e.printStackTrace(System.err); exitCode = 2; }
@@ -40,27 +35,24 @@ public final class Main {
         if (a.length > 0 && "history".equalsIgnoreCase(a[0])) return history(c, a);
         if (a.length >= 2 && "plan".equalsIgnoreCase(a[0])) { try (TestOrchestrator o = new TestOrchestrator(c, m, env)) { var r = o.executePlan(a[1]); return r.passed() ? 0 : 1; } }
         if (a.length >= 2 && "suite".equalsIgnoreCase(a[0])) { try (TestOrchestrator o = new TestOrchestrator(c, m, env)) { var r = o.executeSuite(a[1]); return r.passed() ? 0 : 1; } }
-        if (a.length >= 3 && "data-driven".equalsIgnoreCase(a[0])) {
-            try (TestOrchestrator o = new TestOrchestrator(c, m, env)) { int p = parallelism(a, c.parallelism()); var r = o.executeDataDriven(a[1], a[2], filters(a), p); System.out.println("Data-driven: " + r.testName + " | Iterations: " + r.totalIterations + " | Passed: " + r.passedIterations + " | Failed: " + r.failedIterations); System.out.println("Mode: " + r.executionMode + " | Workers: " + r.parallelism + " | Duration: " + r.durationMs + " ms | Estimated speedup: " + String.format(Locale.ROOT, "%.2fx", r.estimatedSpeedup)); System.out.println("Reports: ./reports/data-driven/" + safe(r.testName) + "/"); return r.passed() ? 0 : 1; }
-        }
+        if (a.length >= 3 && "data-driven".equalsIgnoreCase(a[0])) { try (TestOrchestrator o = new TestOrchestrator(c, m, env)) { int p = parallelism(a, c.parallelism()); var r = o.executeDataDriven(a[1], a[2], filters(a), p); System.out.println("Data-driven: " + r.testName + " | Iterations: " + r.totalIterations + " | Passed: " + r.passedIterations + " | Failed: " + r.failedIterations); System.out.println("Mode: " + r.executionMode + " | Workers: " + r.parallelism + " | Duration: " + r.durationMs + " ms | Estimated speedup: " + String.format(Locale.ROOT, "%.2fx", r.estimatedSpeedup)); System.out.println("Reports: ./reports/data-driven/" + safe(r.testName) + "/"); return r.passed() ? 0 : 1; } }
         if (a.length >= 2 && "validate".equalsIgnoreCase(a[0])) { try (TestOrchestrator o = new TestOrchestrator(c, m, env)) { if ("plan".equalsIgnoreCase(a[1]) && a.length >= 3) return o.validatePlan(a[2]).valid() ? 0 : 1; if ("suite".equalsIgnoreCase(a[1]) && a.length >= 3) return o.validateSuite(a[2]).valid() ? 0 : 1; return 2; } }
         if (a.length > 0 && "interactive".equalsIgnoreCase(a[0])) { interactive(c, m, env); return 0; }
         usage(); return a.length == 0 ? 0 : 2;
     }
 
     private static int history(Config c, String[] a) throws Exception {
-        Path root = Path.of(c.reportsDir(), "history").toAbsolutePath().normalize();
-        int limit = optionInt(a, "--limit", 10);
-        Path indexFile = root.resolve("index.json");
+        Path root = Path.of(c.reportsDir(), "history").toAbsolutePath().normalize(); int limit = optionInt(a, "--limit", 10); Path indexFile = root.resolve("index.json");
         if (!Files.isRegularFile(indexFile)) { System.out.println("No execution history found."); System.out.println("History directory: " + root); return 0; }
         ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
         List<RunHistoryManager.RunSummary> all = mapper.readValue(indexFile.toFile(), new com.fasterxml.jackson.core.type.TypeReference<List<RunHistoryManager.RunSummary>>() {});
         System.out.println("=== Execution History ===");
         all.stream().skip(Math.max(0, all.size() - limit)).forEach(r -> System.out.println(r.runId + " | " + r.suiteName + " | " + r.status + " | " + r.passRate + "% | " + r.durationMs + " ms | regressions=" + r.regressions + " | fixed=" + r.fixed));
-        var analytics = new HistoryAnalyticsManager(root).analyze(Math.max(limit, 1), HistoryAnalyticsManager.DEFAULT_FLAKY_THRESHOLD);
+        int analysisLimit = Math.max(limit, 1); var analytics = new HistoryAnalyticsManager(root).analyze(analysisLimit, HistoryAnalyticsManager.DEFAULT_FLAKY_THRESHOLD);
+        var trends = new TrendAnalyticsManager(root).writeReports(analysisLimit);
         System.out.println("Runs analyzed: " + analytics.runsAnalyzed + " | Tests observed: " + analytics.totalTestsObserved + " | Flaky: " + analytics.flakyTests.size());
-        System.out.println("History dashboard: " + root.resolve("index.html"));
-        System.out.println("Analytics dashboard: " + root.resolve("analytics.html"));
+        System.out.println("Trend: pass-rate delta=" + String.format(Locale.ROOT, "%.2f pp", trends.passRateDelta) + " | duration delta=" + trends.durationDeltaMs + " ms | regressions=" + trends.regressionTotal);
+        System.out.println("History dashboard: " + root.resolve("index.html")); System.out.println("Analytics dashboard: " + root.resolve("analytics.html")); System.out.println("Trend dashboard: " + root.resolve("trends.html"));
         return 0;
     }
 
