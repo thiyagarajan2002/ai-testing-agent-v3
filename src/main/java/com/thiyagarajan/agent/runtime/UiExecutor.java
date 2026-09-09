@@ -17,12 +17,14 @@ import java.util.Locale;
 public class UiExecutor {
     private final Config config;
     private final FailureArtifactManager artifacts;
+    private final double healingMinConfidence;
 
     public UiExecutor() { this(Config.load()); }
     public UiExecutor(Config config) {
         if (config == null) throw new IllegalArgumentException("Config cannot be null");
         this.config = config;
         this.artifacts = new FailureArtifactManager(config);
+        this.healingMinConfidence = SelfHealingEngine.DEFAULT_MIN_CONFIDENCE;
     }
 
     public ExecutionResult execute(TestPlan plan) {
@@ -49,14 +51,15 @@ public class UiExecutor {
                     } catch (Exception firstFailure) {
                         FailureIntelligence.Analysis analysis = classify(firstFailure);
                         SelfHealingEngine.HealingResult healing = analysis.recommendation() == FailureIntelligence.RetryRecommendation.HEAL_LOCATOR
-                                ? SelfHealingEngine.heal(page, step.locator) : new SelfHealingEngine.HealingResult(step.locator, null, 0.0, "Healing not applicable");
+                                ? SelfHealingEngine.heal(page, step.locator, healingMinConfidence)
+                                : new SelfHealingEngine.HealingResult(step.locator, null, 0.0, "Healing not applicable", List.of());
                         if (healing.healed()) {
                             try {
                                 executeStep(page, plan, step, healing.healedLocator());
                                 Path screenshot = captureStep(page, plan.name, index, step.action);
                                 String details = "HEALED; originalLocator=" + safe(step.locator) + "; healedLocator=" + safe(healing.healedLocator())
-                                        + "; confidence=" + healing.confidence() + "; reason=" + healing.reason()
-                                        + "; screenshot=" + (screenshot == null ? "unavailable" : screenshot);
+                                        + "; confidence=" + healing.confidence() + "; reason=" + safe(healing.reason())
+                                        + "; evidence=" + evidence(healing) + "; screenshot=" + (screenshot == null ? "unavailable" : screenshot);
                                 result.steps.add(new ExecutionResult.StepResult(step.action, true, details,
                                         System.currentTimeMillis() - start,
                                         screenshot == null ? List.of() : List.of(screenshot.toString())));
@@ -68,8 +71,7 @@ public class UiExecutor {
                         result.passed = false;
                         Path screenshot = captureFailure(page, plan.name, index);
                         String details = SecurityRedactor.redactText(firstFailure.toString());
-                        if (healing.healed()) details += "; healingAttempted=true; originalLocator=" + safe(step.locator)
-                                + "; healedLocator=" + safe(healing.healedLocator()) + "; confidence=" + healing.confidence();
+                        if (!healing.evidence().isEmpty()) details += "; healingEvidence=" + evidence(healing);
                         Path metadata = artifacts.createFailureMetadata(plan.name, index, step.action, details);
                         List<String> files = screenshot == null ? List.of(metadata.toString()) : List.of(screenshot.toString(), metadata.toString());
                         result.steps.add(new ExecutionResult.StepResult(step.action, false, details,
@@ -89,23 +91,23 @@ public class UiExecutor {
         return result;
     }
 
+    private String evidence(SelfHealingEngine.HealingResult healing) {
+        return healing.evidence().stream()
+                .map(e -> e.locator() + "[matches=" + e.matchCount() + ",visible=" + e.visible() + ",confidence=" + e.confidence() + "]")
+                .reduce((a, b) -> a + "|" + b).orElse("none");
+    }
     private FailureIntelligence.Analysis classify(Exception failure) {
         ExecutionResult failed = new ExecutionResult();
         failed.passed = false;
         failed.steps.add(new ExecutionResult.StepResult("ui", false, failure.toString(), 0));
         return FailureIntelligence.analyze(failed);
     }
-
     private void validate(TestPlan plan) {
         if (plan == null) throw new IllegalArgumentException("UI plan cannot be null");
         if (plan.steps == null || plan.steps.isEmpty()) throw new IllegalArgumentException("UI plan contains no steps");
         if (plan.baseUrl == null || plan.baseUrl.isBlank()) throw new IllegalArgumentException("UI baseUrl is required");
-        for (TestStep step : plan.steps) {
-            if (step == null || step.action == null || step.action.isBlank())
-                throw new IllegalArgumentException("UI step action is required");
-        }
+        for (TestStep step : plan.steps) if (step == null || step.action == null || step.action.isBlank()) throw new IllegalArgumentException("UI step action is required");
     }
-
     private void executeStep(Page page, TestPlan plan, TestStep step, String locatorOverride) {
         if (step.timeoutMs > 0) page.setDefaultTimeout(step.timeoutMs);
         String action = step.action.toLowerCase(Locale.ROOT);
@@ -133,37 +135,11 @@ public class UiExecutor {
             default -> throw new IllegalArgumentException("Unsupported UI action: " + step.action);
         }
     }
-
-    private void requireLocator(String action, Locator target) {
-        if (target == null) throw new IllegalArgumentException("Locator is required for UI action: " + action);
-    }
-    private void assertContains(String actual, String expected, String field) {
-        if (actual == null || !actual.contains(expected)) throw new AssertionError("Expected " + field + " to contain '" + expected + "', actual='" + actual + "'");
-    }
-    private void assertEquals(String actual, String expected, String field) {
-        if (!expected.equals(actual)) throw new AssertionError("Expected " + field + " '" + expected + "', actual='" + actual + "'");
-    }
-    private String resolve(String base, String value) {
-        if (value.startsWith("http://") || value.startsWith("https://")) return value;
-        return base.replaceAll("/$", "") + "/" + value.replaceFirst("^/", "");
-    }
+    private void requireLocator(String action, Locator target) { if (target == null) throw new IllegalArgumentException("Locator is required for UI action: " + action); }
+    private void assertContains(String actual, String expected, String field) { if (actual == null || !actual.contains(expected)) throw new AssertionError("Expected " + field + " to contain '" + expected + "', actual='" + actual + "'"); }
+    private void assertEquals(String actual, String expected, String field) { if (!expected.equals(actual)) throw new AssertionError("Expected " + field + " '" + expected + "', actual='" + actual + "'"); }
+    private String resolve(String base, String value) { if (value.startsWith("http://") || value.startsWith("https://")) return value; return base.replaceAll("/$", "") + "/" + value.replaceFirst("^/", ""); }
     private String safe(String value) { return SecurityRedactor.redactText(value == null ? "" : value); }
-    private Path captureStep(Page page, String testName, int index, String action) {
-        try {
-            Path dir = Path.of(config.reportsDir(), config.screenshotsDir(), "ui", FailureArtifactManager.safe(testName, "test"));
-            Files.createDirectories(dir);
-            Path file = dir.resolve(String.format("%03d-%s.png", index + 1, FailureArtifactManager.safe(action, "step")));
-            page.screenshot(new Page.ScreenshotOptions().setPath(file).setFullPage(true));
-            return file;
-        } catch (Exception ignored) { return null; }
-    }
-    private Path captureFailure(Page page, String testName, int index) {
-        try {
-            Path dir = Path.of(config.reportsDir(), config.screenshotsDir(), "ui", "failures");
-            Files.createDirectories(dir);
-            Path file = dir.resolve(FailureArtifactManager.safe(testName, "test") + "-step-" + (index + 1) + "-failure.png");
-            page.screenshot(new Page.ScreenshotOptions().setPath(file).setFullPage(true));
-            return file;
-        } catch (Exception ignored) { return null; }
-    }
+    private Path captureStep(Page page, String testName, int index, String action) { try { Path dir = Path.of(config.reportsDir(), config.screenshotsDir(), "ui", FailureArtifactManager.safe(testName, "test")); Files.createDirectories(dir); Path file = dir.resolve(String.format("%03d-%s.png", index + 1, FailureArtifactManager.safe(action, "step"))); page.screenshot(new Page.ScreenshotOptions().setPath(file).setFullPage(true)); return file; } catch (Exception ignored) { return null; } }
+    private Path captureFailure(Page page, String testName, int index) { try { Path dir = Path.of(config.reportsDir(), config.screenshotsDir(), "ui", "failures"); Files.createDirectories(dir); Path file = dir.resolve(FailureArtifactManager.safe(testName, "test") + "-step-" + (index + 1) + "-failure.png"); page.screenshot(new Page.ScreenshotOptions().setPath(file).setFullPage(true)); return file; } catch (Exception ignored) { return null; } }
 }
