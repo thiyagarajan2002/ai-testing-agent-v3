@@ -29,9 +29,14 @@ public final class SelfHealingEngine {
         return new HealingResult(originalLocator, null, 0.0, "No unique visible safe alternative found");
     }
 
-    static List<Candidate> candidates(String locator) {
+    /**
+     * Returns deterministic alternative selectors derived from the supplied locator.
+     * Public for validation and unit testing; candidates never execute browser actions.
+     */
+    public static List<Candidate> candidates(String locator) {
         LinkedHashSet<String> seen = new LinkedHashSet<>();
         List<Candidate> result = new ArrayList<>();
+        if (locator == null || locator.isBlank()) return result;
         String trimmed = locator.trim();
 
         if (trimmed.startsWith("#") && trimmed.length() > 1) {
