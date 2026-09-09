@@ -1,6 +1,7 @@
 package com.thiyagarajan.agent.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.thiyagarajan.agent.ai.AiIntelligenceResult;
 import com.thiyagarajan.agent.ai.OllamaClient;
 import com.thiyagarajan.agent.config.Config;
 import com.thiyagarajan.agent.config.EnvironmentManager;
@@ -179,7 +180,7 @@ public final class TestOrchestrator implements AutoCloseable {
                 var v = TestPlanValidator.validate(t);
                 ps.add(new PlanPreflight(f, v.valid(), v.errors(), v.warnings()));
             } catch (AgentExecutionException e) {
-                ps.add(new PlanPreflight(f, false, List.of(e.getMessage()), List.of()));
+                ps.add(new PlanPreflight(f, false, List.of(e.getMessage()), List.of());
             }
         }
         return new PreflightSuiteResult(suite.name, ps);
@@ -205,6 +206,7 @@ public final class TestOrchestrator implements AutoCloseable {
     }
 
     public TestPlan plan(String requirement) throws Exception { return runner.plan(requirement); }
+    public AiIntelligenceResult intelligence(String requirement) throws Exception { return runner.intelligence(requirement); }
     public ExecutionResult execute(TestPlan p) { return runner.execute(p); }
 
     public void analyzeIfFailed(TestPlan p, ExecutionResult r) {
