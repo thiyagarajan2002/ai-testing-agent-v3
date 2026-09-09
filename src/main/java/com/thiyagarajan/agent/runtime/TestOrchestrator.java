@@ -180,7 +180,7 @@ public final class TestOrchestrator implements AutoCloseable {
                 var v = TestPlanValidator.validate(t);
                 ps.add(new PlanPreflight(f, v.valid(), v.errors(), v.warnings()));
             } catch (AgentExecutionException e) {
-                ps.add(new PlanPreflight(f, false, List.of(e.getMessage()), List.of());
+                ps.add(new PlanPreflight(f, false, List.of(e.getMessage()), List.of()));
             }
         }
         return new PreflightSuiteResult(suite.name, ps);
