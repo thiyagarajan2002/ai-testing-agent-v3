@@ -9,7 +9,7 @@ import com.thiyagarajan.agent.runtime.*;
 import java.util.*;
 
 public final class Main {
-    private static final String VERSION = "3.26.0";
+    private static final String VERSION = "3.28.0";
 
     private Main() {}
 
@@ -23,6 +23,7 @@ public final class Main {
 
             try (RunLogManager logs = RunLogManager.start(config.reportsDir(), area, command)) {
                 logs.log("Command: " + String.join(" ", args));
+                logs.log("Terminal output is captured to: " + logs.logFile());
                 try {
                     exitCode = run(args);
                 } catch (AgentExecutionException e) {
