@@ -9,7 +9,7 @@ import com.thiyagarajan.agent.runtime.*;
 import java.util.*;
 
 public final class Main {
-    private static final String VERSION = "3.28.0";
+    private static final String VERSION = "3.29.0";
 
     private Main() {}
 
@@ -21,7 +21,9 @@ public final class Main {
             String area = logArea(args);
             String command = args.length == 0 ? "help" : args[0];
 
-            try (RunLogManager logs = RunLogManager.start(config.reportsDir(), area, command)) {
+            try (RunContext context = RunContext.start();
+                 RunLogManager logs = RunLogManager.start(config.reportsDir(), area, command, context.runId())) {
+                logs.log("Run ID: " + context.runId());
                 logs.log("Command: " + String.join(" ", args));
                 logs.log("Terminal output is captured to: " + logs.logFile());
                 try {
@@ -104,50 +106,35 @@ public final class Main {
         if ("interactive".equalsIgnoreCase(a[0])) return "ui";
         if ("plan".equalsIgnoreCase(a[0]) || "suite".equalsIgnoreCase(a[0])
                 || "data-driven".equalsIgnoreCase(a[0])
-                || ("validate".equalsIgnoreCase(a[0]) && a.length > 1 && "plan".equalsIgnoreCase(a[1]))) {
-            return "api";
-        }
+                || ("validate".equalsIgnoreCase(a[0]) && a.length > 1 && "plan".equalsIgnoreCase(a[1]))) return "api";
         return "terminal";
     }
 
     private static Map<String, String> filters(String[] a) {
         Map<String, String> f = new LinkedHashMap<>();
-        for (int i = 0; i < a.length - 1; i++) {
-            if ("--filter".equalsIgnoreCase(a[i])) {
-                String[] p = a[i + 1].split("=", 2);
-                if (p.length != 2 || p[0].isBlank()) {
-                    throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION,
-                            "Filter must use key=value");
-                }
-                f.put(p[0], p[1]);
-            }
+        for (int i = 0; i < a.length - 1; i++) if ("--filter".equalsIgnoreCase(a[i])) {
+            String[] p = a[i + 1].split("=", 2);
+            if (p.length != 2 || p[0].isBlank()) throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION, "Filter must use key=value");
+            f.put(p[0], p[1]);
         }
         return f;
     }
 
     private static int parallelism(String[] a, int fallback) {
-        for (int i = 0; i < a.length - 1; i++) {
-            if ("--parallelism".equalsIgnoreCase(a[i])) {
-                try {
-                    int value = Integer.parseInt(a[i + 1]);
-                    if (value < 1 || value > Config.MAX_PARALLELISM) {
-                        throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION,
-                                "--parallelism must be between 1 and " + Config.MAX_PARALLELISM);
-                    }
-                    return value;
-                } catch (NumberFormatException e) {
-                    throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION,
-                            "--parallelism must be an integer: " + a[i + 1], e);
-                }
+        for (int i = 0; i < a.length - 1; i++) if ("--parallelism".equalsIgnoreCase(a[i])) {
+            try {
+                int value = Integer.parseInt(a[i + 1]);
+                if (value < 1 || value > Config.MAX_PARALLELISM) throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "--parallelism must be between 1 and " + Config.MAX_PARALLELISM);
+                return value;
+            } catch (NumberFormatException e) {
+                throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "--parallelism must be an integer: " + a[i + 1], e);
             }
         }
         return fallback;
     }
 
     private static String option(String[] a, String n) {
-        for (int i = 0; i < a.length - 1; i++) {
-            if (n.equalsIgnoreCase(a[i])) return a[i + 1].startsWith("--") ? null : a[i + 1];
-        }
+        for (int i = 0; i < a.length - 1; i++) if (n.equalsIgnoreCase(a[i])) return a[i + 1].startsWith("--") ? null : a[i + 1];
         return null;
     }
 
@@ -169,24 +156,19 @@ public final class Main {
                     ExecutionResult r = o.execute(p);
                     o.analyzeIfFailed(p, r);
                     o.writeReport(r);
-                } catch (Exception x) {
-                    System.err.println("Agent error: " + x.getMessage());
-                }
+                } catch (Exception x) { System.err.println("Agent error: " + x.getMessage()); }
             }
         }
     }
 
     private static void usage() {
         System.out.println("=== AI Testing Agent v" + VERSION + " ===\nCommands:\n"
-                + "  plan <file> [--env <name>]\n"
-                + "  suite <file> [--env <name>]\n"
+                + "  plan <file> [--env <name>]\n  suite <file> [--env <name>]\n"
                 + "  data-driven <plan> <data-file> [--filter key=value] [--parallelism <N>] [--env <name>]\n"
-                + "  validate plan <file> [--env <name>]\n"
-                + "  validate suite <file> [--env <name>]\n"
+                + "  validate plan <file> [--env <name>]\n  validate suite <file> [--env <name>]\n"
                 + "  interactive [--env <name>]\n\n"
-                + "Terminal logs: ./reports/<area>/logs/\n"
-                + "API runs: ./reports/api/logs/\n"
-                + "UI evidence: ./reports/ui/screenshots/\n"
+                + "Every CLI execution receives a unique Run ID; test/step results can use the same correlation ID.\n"
+                + "Terminal logs: ./reports/<area>/logs/\nAPI runs: ./reports/api/logs/\nUI evidence: ./reports/ui/screenshots/\n"
                 + "Data-driven parallelism defaults to PARALLELISM and supports 1-64 workers.");
     }
 }
