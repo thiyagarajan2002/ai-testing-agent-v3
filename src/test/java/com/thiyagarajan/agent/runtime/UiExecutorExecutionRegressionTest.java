@@ -46,17 +46,10 @@ class UiExecutorExecutionRegressionTest {
         TestStep navigate = step("navigate", "");
         navigate.value = plan.baseUrl;
         plan.steps.add(navigate);
-
-        TestStep fill = step("fill", "#search");
-        fill.value = "java tutorial";
-        plan.steps.add(fill);
-        TestStep press = step("press", "#search");
-        press.value = "Enter";
-        plan.steps.add(press);
+        TestStep fill = step("fill", "#search"); fill.value = "java tutorial"; plan.steps.add(fill);
+        TestStep press = step("press", "#search"); press.value = "Enter"; plan.steps.add(press);
         plan.steps.add(step("click", "#result"));
-        TestStep assertion = step("asserttext", "#status");
-        assertion.value = "clicked";
-        plan.steps.add(assertion);
+        TestStep assertion = step("asserttext", "#status"); assertion.value = "clicked"; plan.steps.add(assertion);
 
         ExecutionResult result = execute(plan, null);
 
@@ -69,26 +62,14 @@ class UiExecutorExecutionRegressionTest {
     @Tag("regression")
     void semanticTargetsAreResolvedAgainstLiveDomForEachStateChange() {
         TestPlan plan = plan();
-        TestStep navigate = step("navigate", "");
-        navigate.value = plan.baseUrl;
-        plan.steps.add(navigate);
+        TestStep navigate = step("navigate", ""); navigate.value = plan.baseUrl; plan.steps.add(navigate);
+        TestStep first = step("click", ""); first.target = "the first action button"; plan.steps.add(first);
+        TestStep second = step("click", ""); second.target = "the continue button that appears after the action"; plan.steps.add(second);
+        TestStep assertion = step("asserttext", "#status"); assertion.value = "completed"; plan.steps.add(assertion);
 
-        TestStep first = step("click", "");
-        first.target = "the first action button";
-        plan.steps.add(first);
-        TestStep second = step("click", "");
-        second.target = "the continue button that appears after the action";
-        plan.steps.add(second);
-        TestStep assertion = step("asserttext", "#status");
-        assertion.value = "completed";
-        plan.steps.add(assertion);
-
-        AiProvider ai = prompt -> {
-            if (prompt.contains("continue button that appears after the action")) {
-                return "{\"locator\":\"#continue\",\"confidence\":0.99,\"reason\":\"live DOM contains the continue button\",\"alternatives\":[]}";
-            }
-            return "{\"locator\":\"#action\",\"confidence\":0.99,\"reason\":\"live DOM contains the first action button\",\"alternatives\":[]}";
-        };
+        AiProvider ai = prompt -> prompt.contains("continue button that appears after the action")
+                ? "{\"locator\":\"#continue\",\"confidence\":0.99,\"reason\":\"live DOM contains the continue button\",\"alternatives\":[]}"
+                : "{\"locator\":\"#action\",\"confidence\":0.99,\"reason\":\"live DOM contains the first action button\",\"alternatives\":[]}";
 
         ExecutionResult result = execute(plan, ai);
 
@@ -101,13 +82,8 @@ class UiExecutorExecutionRegressionTest {
     @Tag("regression")
     void invalidSemanticLocatorIsRejectedWithoutExecutingAnInventedSelector() {
         TestPlan plan = plan();
-        TestStep navigate = step("navigate", "");
-        navigate.value = plan.baseUrl;
-        plan.steps.add(navigate);
-        TestStep click = step("click", "");
-        click.target = "element that does not exist";
-        plan.steps.add(click);
-
+        TestStep navigate = step("navigate", ""); navigate.value = plan.baseUrl; plan.steps.add(navigate);
+        TestStep click = step("click", ""); click.target = "element that does not exist"; plan.steps.add(click);
         AiProvider ai = prompt -> "{\"locator\":\"#does-not-exist\",\"confidence\":0.99,\"reason\":\"not actually in DOM\",\"alternatives\":[]}";
 
         ExecutionResult result = execute(plan, ai);
@@ -118,25 +94,15 @@ class UiExecutorExecutionRegressionTest {
     }
 
     private static ExecutionResult execute(TestPlan plan, AiProvider ai) {
-        Config config = new Config("http://localhost:11434", "test", true, 5000, 0, 1,
-                reports.toString(), "screenshots");
+        Config config = new Config("http://localhost:11434", "test", true, 5000, 0, 1, reports.toString(), "screenshots");
         return new UiExecutor(config, ai, new ObjectMapper()).execute(plan);
     }
 
     private static TestPlan plan() {
-        TestPlan plan = new TestPlan();
-        plan.name = "UI execution regression";
-        plan.type = "UI";
-        plan.baseUrl = "http://127.0.0.1:" + port + "/";
-        return plan;
+        TestPlan plan = new TestPlan(); plan.name = "UI execution regression"; plan.type = "UI"; plan.baseUrl = "http://127.0.0.1:" + port + "/"; return plan;
     }
 
-    private static TestStep step(String action, String locator) {
-        TestStep step = new TestStep();
-        step.action = action;
-        step.locator = locator;
-        return step;
-    }
+    private static TestStep step(String action, String locator) { TestStep step = new TestStep(); step.action = action; step.locator = locator; return step; }
 
     private static void servePage(HttpExchange exchange) throws IOException {
         String html = """
@@ -151,8 +117,6 @@ class UiExecutorExecutionRegressionTest {
         byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
         exchange.sendResponseHeaders(200, bytes.length);
-        try (var output = exchange.getResponseBody()) {
-            output.write(bytes);
-        }
+        try (var output = exchange.getResponseBody()) { output.write(bytes); }
     }
 }
