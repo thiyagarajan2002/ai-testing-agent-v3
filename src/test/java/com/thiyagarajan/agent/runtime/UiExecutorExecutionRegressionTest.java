@@ -62,7 +62,7 @@ class UiExecutorExecutionRegressionTest {
 
         assertTrue(result.passed, result.steps.toString());
         assertEquals(5, result.steps.size());
-        assertTrue(result.steps.stream().allMatch(ExecutionResult.StepResult::passed));
+        assertTrue(result.steps.stream().allMatch(step -> step.passed));
     }
 
     @Test
@@ -93,8 +93,8 @@ class UiExecutorExecutionRegressionTest {
         ExecutionResult result = execute(plan, ai);
 
         assertTrue(result.passed, result.steps.toString());
-        assertTrue(result.steps.get(1).details().contains("locator=#action"));
-        assertTrue(result.steps.get(2).details().contains("locator=#continue"));
+        assertTrue(result.steps.get(1).details.contains("locator=#action"));
+        assertTrue(result.steps.get(2).details.contains("locator=#continue"));
     }
 
     @Test
@@ -114,7 +114,7 @@ class UiExecutorExecutionRegressionTest {
 
         assertFalse(result.passed);
         assertEquals(2, result.steps.size());
-        assertFalse(result.steps.get(1).passed());
+        assertFalse(result.steps.get(1).passed);
     }
 
     private static ExecutionResult execute(TestPlan plan, AiProvider ai) {
