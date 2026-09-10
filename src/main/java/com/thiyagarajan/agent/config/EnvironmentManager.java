@@ -12,11 +12,13 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Loads environment profiles and resolves runtime placeholders. */
+/** Loads environment profiles and resolves runtime placeholders, including secrets. */
 public final class EnvironmentManager {
-    private static final Pattern P = Pattern.compile("\\$\\{(env|data|profile)\\.([A-Za-z0-9_.-]+)}");
+    private static final Pattern P = Pattern.compile("\\$\\{(env|data|profile|secret)\\.([A-Za-z0-9_.-]+)}");
     private final ObjectMapper mapper;
-    public EnvironmentManager(ObjectMapper mapper) { this.mapper = mapper == null ? new ObjectMapper() : mapper; }
+    private final SecretManager secrets;
+    public EnvironmentManager(ObjectMapper mapper) { this(mapper, new SecretManager()); }
+    public EnvironmentManager(ObjectMapper mapper, SecretManager secrets) { this.mapper = mapper == null ? new ObjectMapper() : mapper; this.secrets = secrets == null ? new SecretManager() : secrets; }
 
     public EnvironmentProfile load(String environment, Path root) throws Exception {
         String name = environment == null || environment.isBlank() ? "local" : environment.trim();
@@ -37,11 +39,9 @@ public final class EnvironmentManager {
         plan.variables = resolveMap(plan.variables, profile);
         if (plan.steps != null) for (TestStep s : plan.steps) {
             if (s == null) continue;
-            s.path = resolve(s.path, profile); s.locator = resolve(s.locator, profile);
-            s.value = resolve(s.value, profile); s.body = resolve(s.body, profile);
+            s.path = resolve(s.path, profile); s.locator = resolve(s.locator, profile); s.value = resolve(s.value, profile); s.body = resolve(s.body, profile);
             s.query = resolveMap(s.query, profile); s.save = resolveMap(s.save, profile);
-            Map<String,String> headers = new LinkedHashMap<>();
-            headers.putAll(resolveMap(profile.headers, profile)); headers.putAll(resolveMap(s.headers, profile)); s.headers = headers;
+            Map<String,String> headers = new LinkedHashMap<>(); headers.putAll(resolveMap(profile.headers, profile)); headers.putAll(resolveMap(s.headers, profile)); s.headers = headers;
             if (s.assertSpec != null) { s.assertSpec.contains = resolve(s.assertSpec.contains, profile); s.assertSpec.jsonPath = resolve(s.assertSpec.jsonPath, profile); s.assertSpec.equals = resolve(s.assertSpec.equals, profile); }
             if (profile.timeoutMs != null && profile.timeoutMs > 0 && s.timeoutMs == 30000) s.timeoutMs = profile.timeoutMs;
         }
@@ -58,6 +58,6 @@ public final class EnvironmentManager {
     private Map<String,String> resolveMap(Map<String,String> in, EnvironmentProfile p) { Map<String,String> out=new LinkedHashMap<>(); if(in!=null) in.forEach((k,v)->out.put(resolve(k,p),resolve(v,p))); return out; }
     private String resolve(String value, EnvironmentProfile p) {
         if(value==null||value.isEmpty()) return value; Matcher m=P.matcher(value); StringBuffer b=new StringBuffer();
-        while(m.find()){ String src=m.group(1), key=m.group(2); String r=switch(src){case "env"->System.getenv(key);case "data"->p.data.get(key);case "profile"->p.variables.get(key);default->null;}; if(r==null) throw new IllegalArgumentException("Unresolved environment placeholder: " + m.group()); m.appendReplacement(b,Matcher.quoteReplacement(r)); } m.appendTail(b); return b.toString();
+        while(m.find()){ String src=m.group(1), key=m.group(2); String r=switch(src){case "env"->System.getenv(key);case "data"->p.data.get(key);case "profile"->p.variables.get(key);case "secret"->secrets.resolve("${secret." + key + "}");default->null;}; if(r==null) throw new IllegalArgumentException("Unresolved environment placeholder: " + m.group()); m.appendReplacement(b,Matcher.quoteReplacement(r)); } m.appendTail(b); return b.toString();
     }
 }
