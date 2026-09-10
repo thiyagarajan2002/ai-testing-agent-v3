@@ -10,7 +10,7 @@ import java.util.Set;
 /** Small dependency-free parser for the agent command line. */
 public final class CliParser {
     private static final Set<String> COMMANDS = Set.of(
-            "plan", "suite", "data-driven", "history", "validate",
+            "plan", "generate", "suite", "data-driven", "history", "validate",
             "interactive", "plugins", "help", "version");
     private static final Set<String> OPTIONS_WITH_VALUE = Set.of(
             "--env", "--limit", "--filter", "--parallelism", "--output");
@@ -28,48 +28,26 @@ public final class CliParser {
     public static CliParser parse(String[] args) {
         String[] a = args == null ? new String[0] : args;
         if (a.length == 0) return new CliParser("help", Map.of(), new String[0]);
-
         Map<String, String> opts = new LinkedHashMap<>();
         List<String> pos = new ArrayList<>();
         int index = 0;
         String command;
-
-        if ("--help".equals(a[0])) {
-            command = "help";
-            opts.put("--help", "true");
-            index = 1;
-        } else if ("--version".equals(a[0])) {
-            command = "version";
-            opts.put("--version", "true");
-            index = 1;
-        } else {
+        if ("--help".equals(a[0])) { command = "help"; opts.put("--help", "true"); index = 1; }
+        else if ("--version".equals(a[0])) { command = "version"; opts.put("--version", "true"); index = 1; }
+        else {
             command = a[0].toLowerCase(Locale.ROOT);
-            if (!COMMANDS.contains(command)) {
-                throw new IllegalArgumentException("Unknown command: " + a[0]);
-            }
+            if (!COMMANDS.contains(command)) throw new IllegalArgumentException("Unknown command: " + a[0]);
             index = 1;
         }
-
         for (int i = index; i < a.length; i++) {
             String token = a[i];
             if (token.startsWith("--")) {
-                if ("--help".equals(token) || "--version".equals(token)) {
-                    opts.put(token, "true");
-                    continue;
-                }
-                if (!OPTIONS_WITH_VALUE.contains(token)) {
-                    throw new IllegalArgumentException("Unknown option: " + token);
-                }
-                if (i + 1 >= a.length || a[i + 1].startsWith("--")) {
-                    throw new IllegalArgumentException("Missing value for " + token);
-                }
-                if (opts.containsKey(token) && !"--filter".equals(token)) {
-                    throw new IllegalArgumentException("Duplicate option: " + token);
-                }
+                if ("--help".equals(token) || "--version".equals(token)) { opts.put(token, "true"); continue; }
+                if (!OPTIONS_WITH_VALUE.contains(token)) throw new IllegalArgumentException("Unknown option: " + token);
+                if (i + 1 >= a.length || a[i + 1].startsWith("--")) throw new IllegalArgumentException("Missing value for " + token);
+                if (opts.containsKey(token) && !"--filter".equals(token)) throw new IllegalArgumentException("Duplicate option: " + token);
                 opts.put(token, a[++i]);
-            } else {
-                pos.add(token);
-            }
+            } else pos.add(token);
         }
         return new CliParser(command, opts, pos.toArray(String[]::new));
     }
