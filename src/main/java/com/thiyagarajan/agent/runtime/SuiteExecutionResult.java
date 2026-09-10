@@ -6,6 +6,7 @@ import java.util.List;
 
 /** Aggregated result for a complete test suite execution. */
 public class SuiteExecutionResult {
+    public String runId = "";
     public String suiteName;
     public String status;
     public String startedAt;
@@ -18,6 +19,8 @@ public class SuiteExecutionResult {
 
     public SuiteExecutionResult() {
         startedAt = Instant.now().toString();
+        runId = RunContext.currentRunId();
+        if (runId.isBlank()) runId = RunContext.newRunId();
     }
 
     public boolean passed() {
