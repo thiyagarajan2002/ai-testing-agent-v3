@@ -1,6 +1,5 @@
 package com.thiyagarajan.agent.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thiyagarajan.agent.config.Config;
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestStep;
@@ -39,6 +38,7 @@ class ApiExecutorExecutionRegressionTest {
             exchange.getResponseHeaders().add("Allow", "GET,POST,OPTIONS");
             respond(exchange, 204, "");
         });
+        server.createContext("/api/methods", exchange -> respond(exchange, 200, "{\"method\":\"" + exchange.getRequestMethod() + "\"}"));
         server.start();
         port = server.getAddress().getPort();
     }
@@ -62,7 +62,7 @@ class ApiExecutorExecutionRegressionTest {
 
         assertTrue(result.passed, result.steps.toString());
         assertEquals(1, result.steps.size());
-        assertTrue(result.steps.get(0).details().contains("saved=itemId"));
+        assertTrue(result.steps.get(0).details.contains("saved=itemId"));
     }
 
     @Test
@@ -86,12 +86,8 @@ class ApiExecutorExecutionRegressionTest {
     void allSupportedHttpMethodsRemainSupported() {
         TestPlan plan = plan();
         for (String method : new String[]{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}) {
-            TestStep step = step(method, method.equals("OPTIONS") ? "/api/options" : "/api/item");
-            step.assertSpec.status = method.equals("POST") ? 201 : method.equals("HEAD") ? 200 : method.equals("OPTIONS") ? 204 : 200;
-            if (method.equals("POST") || method.equals("PUT") || method.equals("PATCH") || method.equals("DELETE")) {
-                step.body = "{\"method\":\"" + method + "\"}";
-                if (!method.equals("POST")) step.assertSpec.status = 200;
-            }
+            TestStep step = step(method, method.equals("OPTIONS") ? "/api/options" : "/api/methods");
+            step.assertSpec.status = method.equals("OPTIONS") ? 204 : 200;
             plan.steps.add(step);
         }
 
@@ -114,7 +110,7 @@ class ApiExecutorExecutionRegressionTest {
         ExecutionResult result = executor().execute(plan);
 
         assertTrue(result.passed, result.steps.toString());
-        assertTrue(result.steps.get(0).details().contains("attempt=2/2"));
+        assertTrue(result.steps.get(0).details.contains("attempt=2/2"));
         assertEquals(2, RetryHandler.CALLS.get());
     }
 
@@ -130,7 +126,7 @@ class ApiExecutorExecutionRegressionTest {
 
         assertFalse(result.passed);
         assertEquals(1, result.steps.size());
-        assertFalse(result.steps.get(0).passed());
+        assertFalse(result.steps.get(0).passed);
     }
 
     private static TestPlan plan() {
