@@ -20,7 +20,8 @@ public final class PluginManager {
         return List.copyOf(plugins);
     }
 
-    public synchronized void startAll() { plugins.forEach(AgentPlugin::start); }
+    //public synchronized void startAll() { plugins.forEach(AgentPlugin::start); }
+    public synchronized void stopAll() { for (int i = plugins.size() - 1; i >= 0; i--) { plugins.get(i).stop(); } }
     public synchronized void stopAll() { plugins.asReversed().forEach(AgentPlugin::stop); }
     public synchronized List<AgentPlugin> plugins() { return List.copyOf(plugins); }
 }
