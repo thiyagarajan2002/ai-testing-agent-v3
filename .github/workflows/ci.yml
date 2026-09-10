@@ -63,3 +63,12 @@ jobs:
             target/ci-examples/
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Upload runnable jar
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ai-testing-agent-shaded-jar
+          path: target/*-shaded.jar
+          if-no-files-found: ignore
+          retention-days: 14
