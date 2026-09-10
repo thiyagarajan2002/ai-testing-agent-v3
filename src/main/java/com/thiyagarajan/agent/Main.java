@@ -12,7 +12,7 @@ import java.nio.file.Path;
 import java.util.*;
 
 public final class Main {
-    private static final String VERSION = "3.39.0";
+    private static final String VERSION = "3.40.0";
     private Main() {}
     public static void main(String[] a) {
         String[] args = a == null ? new String[0] : a; int exitCode = 0;
