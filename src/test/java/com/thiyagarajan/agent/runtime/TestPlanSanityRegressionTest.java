@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.thiyagarajan.agent.ai.PromptManager;
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestStep;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -13,6 +14,7 @@ class TestPlanSanityRegressionTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
+    @Tag("sanity")
     void apiSanityPlanIsValid() {
         TestPlan plan = new TestPlan();
         plan.name = "API health sanity";
@@ -27,6 +29,7 @@ class TestPlanSanityRegressionTest {
     }
 
     @Test
+    @Tag("regression")
     void apiRegressionRejectsUiAction() {
         TestPlan plan = new TestPlan();
         plan.type = "API";
@@ -39,6 +42,7 @@ class TestPlanSanityRegressionTest {
     }
 
     @Test
+    @Tag("sanity")
     void uiSanityPlanCanBeLocatorlessWithSemanticTargets() {
         TestPlan plan = new TestPlan();
         plan.name = "YouTube search sanity";
@@ -65,6 +69,7 @@ class TestPlanSanityRegressionTest {
     }
 
     @Test
+    @Tag("regression")
     void uiRegressionStillAcceptsExplicitLocator() {
         TestPlan plan = new TestPlan();
         plan.type = "UI";
@@ -77,6 +82,7 @@ class TestPlanSanityRegressionTest {
     }
 
     @Test
+    @Tag("regression")
     void uiRegressionRejectsActionWithoutTargetOrLocator() {
         TestPlan plan = new TestPlan();
         plan.type = "UI";
@@ -89,6 +95,7 @@ class TestPlanSanityRegressionTest {
     }
 
     @Test
+    @Tag("sanity")
     void promptRegressionRequiresLocatorlessUiPlanning() {
         String prompt = PromptManager.planningPrompt("open youtube.com, search java tutorial, play first video");
         assertTrue(prompt.contains("prefer a natural-language target"));
@@ -97,6 +104,7 @@ class TestPlanSanityRegressionTest {
     }
 
     @Test
+    @Tag("regression")
     void jacksonRoundTripPreservesSemanticTargetAndLocator() throws Exception {
         TestPlan plan = new TestPlan();
         plan.type = "UI";
