@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.Scanner;
 
 public final class Main {
-    private static final String VERSION = "3.41.0";
+    private static final String VERSION = "3.42.0";
     private Main() { }
 
     public static void main(String[] a) {
