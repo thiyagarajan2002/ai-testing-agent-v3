@@ -1,10 +1,8 @@
 package com.thiyagarajan.agent.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.microsoft.playwright.Browser;
-import com.microsoft.playwright.BrowserType;
-import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import com.thiyagarajan.agent.ai.AiProvider;
 import com.thiyagarajan.agent.config.Config;
 import com.thiyagarajan.agent.model.TestPlan;
@@ -14,31 +12,40 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class UiExecutorExecutionRegressionTest {
+    private static HttpServer server;
+    private static int port;
     private static Path reports;
 
     @BeforeAll
     static void setup() throws Exception {
         reports = Files.createTempDirectory("agent-ui-regression-");
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", UiExecutorExecutionRegressionTest::servePage);
+        server.start();
+        port = server.getAddress().getPort();
     }
 
     @AfterAll
-    static void cleanup() throws Exception {
-        // Keep the directory available while the test process is running for failure inspection.
-        assertTrue(Files.exists(reports));
+    static void cleanup() {
+        if (server != null) server.stop(0);
     }
 
     @Test
     @Tag("sanity")
     void explicitLocatorsExecuteNavigationFillPressAndClick() {
         TestPlan plan = plan();
-        plan.steps.add(step("navigate", ""));
-        plan.steps.get(0).value = plan.baseUrl;
+        TestStep navigate = step("navigate", "");
+        navigate.value = plan.baseUrl;
+        plan.steps.add(navigate);
 
         TestStep fill = step("fill", "#search");
         fill.value = "java tutorial";
@@ -46,8 +53,7 @@ class UiExecutorExecutionRegressionTest {
         TestStep press = step("press", "#search");
         press.value = "Enter";
         plan.steps.add(press);
-        TestStep click = step("click", "#result");
-        plan.steps.add(click);
+        plan.steps.add(step("click", "#result"));
         TestStep assertion = step("asserttext", "#status");
         assertion.value = "clicked";
         plan.steps.add(assertion);
@@ -70,11 +76,9 @@ class UiExecutorExecutionRegressionTest {
         TestStep first = step("click", "");
         first.target = "the first action button";
         plan.steps.add(first);
-
         TestStep second = step("click", "");
         second.target = "the continue button that appears after the action";
         plan.steps.add(second);
-
         TestStep assertion = step("asserttext", "#status");
         assertion.value = "completed";
         plan.steps.add(assertion);
@@ -123,7 +127,7 @@ class UiExecutorExecutionRegressionTest {
         TestPlan plan = new TestPlan();
         plan.name = "UI execution regression";
         plan.type = "UI";
-        plan.baseUrl = "https://example.com";
+        plan.baseUrl = "http://127.0.0.1:" + port + "/";
         return plan;
     }
 
@@ -132,5 +136,23 @@ class UiExecutorExecutionRegressionTest {
         step.action = action;
         step.locator = locator;
         return step;
+    }
+
+    private static void servePage(HttpExchange exchange) throws IOException {
+        String html = """
+                <!doctype html><html><body>
+                <input id='search' aria-label='Search' />
+                <button id='action' onclick="document.getElementById('action').remove();document.getElementById('continue').hidden=false;document.getElementById('status').textContent='action done'">First Action</button>
+                <button id='continue' hidden onclick="document.getElementById('status').textContent='completed'">Continue</button>
+                <button id='result' onclick="document.getElementById('status').textContent='clicked'">Result</button>
+                <div id='status'>ready</div>
+                </body></html>
+                """;
+        byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
+        exchange.sendResponseHeaders(200, bytes.length);
+        try (var output = exchange.getResponseBody()) {
+            output.write(bytes);
+        }
     }
 }
