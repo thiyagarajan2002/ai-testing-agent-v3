@@ -45,7 +45,13 @@ jobs:
       - name: Install Playwright Chromium
         run: mvn -B --no-transfer-progress -DskipTests exec:java@playwright-cli -Dexec.args="install chromium"
 
-      - name: Build and unit test
+      - name: Run sanity tests
+        run: mvn -B --no-transfer-progress -Psanity test
+
+      - name: Run regression tests
+        run: mvn -B --no-transfer-progress -Pregression test
+
+      - name: Build and unit test full suite
         run: mvn -B --no-transfer-progress verify
 
       - name: Run all repository examples
