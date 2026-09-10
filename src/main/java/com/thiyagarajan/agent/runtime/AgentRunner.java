@@ -3,6 +3,7 @@ package com.thiyagarajan.agent.runtime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.thiyagarajan.agent.ai.AiIntelligenceResult;
@@ -13,8 +14,10 @@ import com.thiyagarajan.agent.config.Config;
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestStep;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 public class AgentRunner {
@@ -23,58 +26,84 @@ public class AgentRunner {
     private final Config config;
 
     public AgentRunner(AiProvider llm, ObjectMapper mapper) { this(llm, mapper, Config.load()); }
-
     public AgentRunner(AiProvider llm, ObjectMapper mapper, Config config) {
         if (mapper == null) throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, "ObjectMapper cannot be null");
-        this.llm = llm;
-        this.mapper = mapper;
-        this.config = config == null ? Config.load() : config;
+        this.llm = llm; this.mapper = mapper; this.config = config == null ? Config.load() : config;
     }
 
     public TestPlan plan(String requirement) throws Exception {
         requireRequirement(requirement); requireAi();
-        try {
-            TestPlan plan = mapper.readValue(cleanJson(llm.generate(PromptManager.planningPrompt(requirement))), TestPlan.class);
-            validate(plan); return plan;
-        } catch (AgentExecutionException e) { throw e; }
+        try { TestPlan plan = mapper.readValue(cleanJson(llm.generate(PromptManager.planningPrompt(requirement))), TestPlan.class); validate(plan); return plan; }
+        catch (AgentExecutionException e) { throw e; }
         catch (Exception e) { throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Unable to generate a valid test plan: " + e.getMessage(), e); }
     }
 
-    /** Generates a locatorless UI plan, resolves every semantic target against live DOM, then emits Java Playwright code. */
+    /** Resolves and verifies locatorless UI steps sequentially against the changing live page, then generates deterministic Java. */
     public String generateUiCode(String requirement, String className) throws Exception {
         TestPlan plan = plan(requirement);
         if (!"UI".equalsIgnoreCase(plan.type)) throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Code generation requires a UI requirement");
-        if (plan.baseUrl == null || plan.baseUrl.isBlank()) throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "UI code generation requires a baseUrl");
+        if (plan.baseUrl == null || plan.baseUrl.isBlank()) throw new AgentExecutionException(AgentExecution.Category.AI_GENERATION, "UI code generation requires a baseUrl");
 
         SemanticLocatorResolver resolver = new SemanticLocatorResolver(llm, mapper);
+        List<TestStep> previousSteps = new ArrayList<>();
         try (Playwright playwright = Playwright.create()) {
             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
             Page page = browser.newPage();
             page.setDefaultTimeout(config.defaultTimeoutMs());
-            page.navigate(plan.baseUrl);
             for (TestStep step : plan.steps) {
-                if (step == null || step.action == null) continue;
-                if ("navigate".equalsIgnoreCase(step.action)) {
-                    String value = step.value == null ? "" : step.value;
-                    page.navigate(resolveUrl(plan.baseUrl, value));
-                    continue;
+                if (step == null || step.action == null || step.action.isBlank()) continue;
+                String action = step.action.toLowerCase(Locale.ROOT);
+                if ("navigate".equals(action)) {
+                    page.navigate(resolveUrl(plan.baseUrl, step.value));
+                } else {
+                    if (step.target != null && !step.target.isBlank()) {
+                        SemanticLocatorResolver.Resolution resolution = resolver.resolve(page, step, previousSteps);
+                        step.locator = resolution.locator();
+                    }
+                    executeGenerationStep(page, plan, step);
                 }
-                if (step.target != null && !step.target.isBlank()) {
-                    SemanticLocatorResolver.Resolution resolution = resolver.resolve(page, step);
-                    step.locator = resolution.locator();
-                }
+                previousSteps.add(copyForContext(step));
             }
             browser.close();
         }
         return new UiCodeGenerator().generate(plan, className);
     }
 
+    private void executeGenerationStep(Page page, TestPlan plan, TestStep step) {
+        String action = step.action.toLowerCase(Locale.ROOT);
+        Locator target = step.locator == null || step.locator.isBlank() ? null : page.locator(step.locator);
+        String value = step.value == null ? "" : step.value;
+        switch (action) {
+            case "click" -> requireTarget(target, action, step);
+            case "fill" -> { requireTarget(target, action, step); target.fill(value); }
+            case "press" -> { requireTarget(target, action, step); target.press(value); }
+            case "selectoption" -> { requireTarget(target, action, step); target.selectOption(value); }
+            case "hover" -> { requireTarget(target, action, step); target.hover(); }
+            case "check" -> { requireTarget(target, action, step); target.check(); }
+            case "uncheck" -> { requireTarget(target, action, step); target.uncheck(); }
+            case "waitfor" -> page.waitForTimeout(Long.parseLong(value));
+            case "waitforvisible" -> { requireTarget(target, action, step); target.waitFor(); }
+            case "waitforhidden" -> { requireTarget(target, action, step); target.waitFor(new Locator.WaitForOptions().setState(com.microsoft.playwright.options.WaitForSelectorState.HIDDEN)); }
+            case "assertvisible" -> { requireTarget(target, action, step); if (!target.isVisible()) throw new IllegalStateException("Target is not visible: " + step.target); }
+            case "asserttext", "assertvalue", "asserttitle", "asserturl", "screenshot" -> { /* no state-changing action required for locator discovery */ }
+            default -> throw new IllegalArgumentException("Unsupported UI action during code generation: " + step.action);
+        }
+    }
+
+    private void requireTarget(Locator target, String action, TestStep step) {
+        if (target == null) throw new IllegalStateException("Resolved locator is required for " + action + ": " + step.target);
+    }
+
+    private TestStep copyForContext(TestStep source) {
+        TestStep copy = new TestStep();
+        copy.action = source.action; copy.target = source.target; copy.locator = source.locator; copy.value = source.value;
+        return copy;
+    }
+
     public AiIntelligenceResult intelligence(String requirement) throws Exception {
         requireRequirement(requirement); requireAi();
-        try {
-            AiIntelligenceResult result = mapper.readValue(cleanJson(llm.generate(PromptManager.intelligencePrompt(requirement))), AiIntelligenceResult.class);
-            validateIntelligence(result); return result;
-        } catch (AgentExecutionException e) { throw e; }
+        try { AiIntelligenceResult result = mapper.readValue(cleanJson(llm.generate(PromptManager.intelligencePrompt(requirement))), AiIntelligenceResult.class); validateIntelligence(result); return result; }
+        catch (AgentExecutionException e) { throw e; }
         catch (Exception e) { throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Unable to generate valid AI test intelligence: " + e.getMessage(), e); }
     }
 
@@ -82,10 +111,7 @@ public class AgentRunner {
         validate(plan);
         try { return "UI".equalsIgnoreCase(plan.type) ? new UiExecutor(config, llm, mapper).execute(plan) : new ApiExecutor().execute(plan); }
         catch (AgentExecutionException e) { throw e; }
-        catch (Exception e) {
-            AgentExecutionException.Category category = "UI".equalsIgnoreCase(plan.type) ? AgentExecutionException.Category.UI_EXECUTION : AgentExecutionException.Category.API_EXECUTION;
-            throw new AgentExecutionException(category, "Test execution failed: " + e.getMessage(), e);
-        }
+        catch (Exception e) { throw new AgentExecutionException("UI".equalsIgnoreCase(plan.type) ? AgentExecutionException.Category.UI_EXECUTION : AgentExecutionException.Category.API_EXECUTION, "Test execution failed: " + e.getMessage(), e); }
     }
 
     public FailureIntelligence.Analysis analyzeFailureIntelligence(ExecutionResult result) { return FailureIntelligence.analyze(result); }
@@ -124,7 +150,7 @@ public class AgentRunner {
         Set<String> ids = new HashSet<>();
         for (AiIntelligenceResult.Scenario scenario : result.scenarios) {
             if (scenario == null || scenario.id == null || scenario.id.isBlank()) throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "AI intelligence scenario id is required");
-            if (!ids.add(scenario.id)) throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Duplicate AI scenario id: " + scenario.id);
+            if (!ids.add(scenario.id)) throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "Duplicate AI intelligence scenario id: " + scenario.id);
             if (scenario.plan == null) throw new AgentExecutionException(AgentExecutionException.Category.AI_GENERATION, "AI scenario " + scenario.id + " has no executable plan");
             validate(scenario.plan);
         }
