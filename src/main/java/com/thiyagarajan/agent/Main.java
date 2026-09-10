@@ -7,49 +7,247 @@ import com.thiyagarajan.agent.io.RunLogManager;
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.plugin.PluginManager;
 import com.thiyagarajan.agent.runtime.*;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Scanner;
 
 public final class Main {
     private static final String VERSION = "3.40.0";
-    private Main() {}
+
+    private Main() { }
+
     public static void main(String[] a) {
-        String[] args = a == null ? new String[0] : a; int exitCode = 0;
+        String[] args = a == null ? new String[0] : a;
+        int exitCode = 0;
         try {
-            Config config = Config.load(); String area = logArea(args); String command = args.length == 0 ? "help" : args[0];
-            try (RunContext context = RunContext.start(); RunLogManager logs = RunLogManager.start(config.reportsDir(), area, command, context.runId())) {
-                logs.log("Run ID: " + context.runId()); logs.log("Command: " + String.join(" ", args));
-                try { exitCode = run(args); } catch (AgentExecutionException e) { logs.log("Agent error [" + e.category() + "]: " + e.getMessage()); e.printStackTrace(System.err); exitCode = 2; }
-                catch (Exception e) { logs.log("Agent error [INFRASTRUCTURE]: " + e.getMessage()); e.printStackTrace(System.err); exitCode = 2; }
+            Config config = Config.load();
+            String area = logArea(args);
+            String command = args.length == 0 ? "help" : args[0];
+            try (RunContext context = RunContext.start();
+                 RunLogManager logs = RunLogManager.start(config.reportsDir(), area, command, context.runId())) {
+                logs.log("Run ID: " + context.runId());
+                logs.log("Command: " + String.join(" ", args));
+                try {
+                    exitCode = run(args);
+                } catch (AgentExecutionException e) {
+                    logs.log("Agent error [" + e.category() + "]: " + e.getMessage());
+                    e.printStackTrace(System.err);
+                    exitCode = 2;
+                } catch (IllegalArgumentException e) {
+                    logs.log("Agent error [CONFIGURATION]: " + e.getMessage());
+                    System.err.println("Agent error [CONFIGURATION]: " + e.getMessage());
+                    exitCode = 2;
+                } catch (Exception e) {
+                    logs.log("Agent error [INFRASTRUCTURE]: " + e.getMessage());
+                    e.printStackTrace(System.err);
+                    exitCode = 2;
+                }
                 logs.log("Exit code: " + exitCode);
             }
-        } catch (Exception e) { System.err.println("Agent error [INFRASTRUCTURE]: " + e.getMessage()); exitCode = 2; }
+        } catch (AgentExecutionException e) {
+            System.err.println("Agent error [" + e.category() + "]: " + e.getMessage());
+            exitCode = 2;
+        } catch (Exception e) {
+            System.err.println("Agent error [INFRASTRUCTURE]: " + e.getMessage());
+            exitCode = 2;
+        }
         if (exitCode != 0) System.exit(exitCode);
     }
+
     static int run(String[] args) throws Exception {
         CliParser cli = CliParser.parse(args);
-        if (cli.versionRequested()) { System.out.println("AI Testing Agent v" + VERSION); return 0; }
-        if (cli.helpRequested()) { usage(); return 0; }
-        Config c = Config.load(); ObjectMapper m = new ObjectMapper(); String env = cli.option("--env");
+        if (cli.versionRequested()) {
+            System.out.println("AI Testing Agent v" + VERSION);
+            return 0;
+        }
+        if (cli.helpRequested()) {
+            usage();
+            return 0;
+        }
+
+        Config config = Config.load();
+        ObjectMapper mapper = new ObjectMapper();
+        String env = cli.option("--env");
+
         return switch (cli.command()) {
-            case "history" -> history(c, cli.option("--limit"));
+            case "history" -> history(config, cli.option("--limit"));
             case "plugins" -> plugins();
-            case "plan" -> executePlan(c, m, env, cli);
-            case "suite" -> executeSuite(c, m, env, cli);
-            case "data-driven" -> dataDriven(c, m, env, cli);
-            case "validate" -> validate(c, m, env, cli);
-            case "interactive" -> { interactive(c, m, env); yield 0; }
-            default -> 2;
+            case "plan" -> executePlan(config, mapper, env, cli);
+            case "suite" -> executeSuite(config, mapper, env, cli);
+            case "data-driven" -> dataDriven(config, mapper, env, cli);
+            case "validate" -> validate(config, mapper, env, cli);
+            case "interactive" -> {
+                requirePositionalCount(cli, 0, "interactive");
+                interactive(config, mapper, env);
+                yield 0;
+            }
+            default -> throw configuration("Unknown command: " + cli.command());
         };
     }
-    private static int executePlan(Config c, ObjectMapper m, String env, CliParser cli) throws Exception { String[] p=cli.positional(); if(p.length<1) throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION,"Usage: plan <file>"); try(TestOrchestrator o=new TestOrchestrator(c,m,env)){return o.executePlan(p[0]).passed()?0:1;} }
-    private static int executeSuite(Config c, ObjectMapper m, String env, CliParser cli) throws Exception { String[] p=cli.positional(); if(p.length<1) throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION,"Usage: suite <file>"); try(TestOrchestrator o=new TestOrchestrator(c,m,env)){return o.executeSuite(p[0]).passed()?0:1;} }
-    private static int dataDriven(Config c,ObjectMapper m,String env,CliParser cli)throws Exception{String[] p=cli.positional();if(p.length<2)throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION,"Usage: data-driven <plan> <data-file>");int workers=cli.option("--parallelism")==null?c.parallelism():Integer.parseInt(cli.option("--parallelism"));Map<String,String> f=new LinkedHashMap<>();if(cli.option("--filter")!=null){String[] x=cli.option("--filter").split("=",2);if(x.length!=2)throw new AgentExecutionException(AgentExecutionException.Category.PLAN_VALIDATION,"Filter must use key=value");f.put(x[0],x[1]);}try(TestOrchestrator o=new TestOrchestrator(c,m,env)){var r=o.executeDataDriven(p[0],p[1],f,workers);System.out.println("Data-driven: "+r.testName+" | Iterations: "+r.totalIterations+" | Passed: "+r.passedIterations+" | Failed: "+r.failedIterations);return r.passed()?0:1;}}
-    private static int validate(Config c,ObjectMapper m,String env,CliParser cli)throws Exception{String[]p=cli.positional();if(p.length<2)throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION,"Usage: validate <plan|suite> <file>");try(TestOrchestrator o=new TestOrchestrator(c,m,env)){if("plan".equalsIgnoreCase(p[0]))return o.validatePlan(p[1]).valid()?0:1;if("suite".equalsIgnoreCase(p[0]))return o.validateSuite(p[1]).valid()?0:1;throw new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION,"Validation target must be plan or suite");}}
-    private static int plugins(){PluginManager p=new PluginManager();var plugins=p.discover();System.out.println("=== Plugins ===");if(plugins.isEmpty())System.out.println("No plugins discovered.");else plugins.forEach(x->System.out.println(x.id()+" | "+x.version()));return 0;}
-    private static int history(Config c,String limitText)throws Exception{int limit=limitText==null?10:Integer.parseInt(limitText);Path root=Path.of(c.reportsDir(),"history").toAbsolutePath().normalize();Path index=root.resolve("index.json");if(!Files.isRegularFile(index)){System.out.println("No execution history found.");return 0;}ObjectMapper mapper=new ObjectMapper().findAndRegisterModules();List<RunHistoryManager.RunSummary> all=mapper.readValue(index.toFile(),new com.fasterxml.jackson.core.type.TypeReference<List<RunHistoryManager.RunSummary>>(){});all.stream().skip(Math.max(0,all.size()-limit)).forEach(r->System.out.println(r.runId+" | "+r.suiteName+" | "+r.status+" | "+r.passRate+"% | "+r.durationMs+" ms"));return 0;}
-    private static String logArea(String[] a){return a.length>0?a[0]:"terminal";}
-    private static void interactive(Config c,ObjectMapper m,String e)throws Exception{try(TestOrchestrator o=new TestOrchestrator(c,m,e);Scanner s=new Scanner(System.in)){while(true){System.out.print("\nRequirement> ");if(!s.hasNextLine())break;String q=s.nextLine();if("exit".equalsIgnoreCase(q.trim()))break;if(q.isBlank())continue;try{TestPlan p=o.plan(q);ExecutionResult r=o.execute(p);o.analyzeIfFailed(p,r);o.writeReport(r);}catch(Exception x){System.err.println("Agent error: "+x.getMessage());}}}}
-    private static void usage(){System.out.println("=== AI Testing Agent v"+VERSION+" ===\nCommands:\n  plan <file> [--env <name>]\n  suite <file> [--env <name>]\n  data-driven <plan> <data-file> [--filter key=value] [--parallelism <N>] [--env <name>]\n  history [--limit <N>]\n  validate plan <file> [--env <name>]\n  validate suite <file> [--env <name>]\n  plugins\n  interactive [--env <name>]\n  version\n  help\n\nGlobal options: --help, --version");}
+
+    private static int executePlan(Config config, ObjectMapper mapper, String env, CliParser cli) throws Exception {
+        requirePositionalCount(cli, 1, "plan <file>");
+        try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, env)) {
+            return orchestrator.executePlan(cli.positional()[0]).passed() ? 0 : 1;
+        }
+    }
+
+    private static int executeSuite(Config config, ObjectMapper mapper, String env, CliParser cli) throws Exception {
+        requirePositionalCount(cli, 1, "suite <file>");
+        try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, env)) {
+            return orchestrator.executeSuite(cli.positional()[0]).passed() ? 0 : 1;
+        }
+    }
+
+    private static int dataDriven(Config config, ObjectMapper mapper, String env, CliParser cli) throws Exception {
+        requirePositionalCount(cli, 2, "data-driven <plan> <data-file>");
+        String[] positional = cli.positional();
+        int workers = cli.option("--parallelism") == null
+                ? config.parallelism()
+                : parseBoundedInt(cli.option("--parallelism"), "--parallelism", 1, Config.MAX_PARALLELISM);
+
+        Map<String, String> filters = new LinkedHashMap<>();
+        String filter = cli.option("--filter");
+        if (filter != null) {
+            String[] parts = filter.split("=", 2);
+            if (parts.length != 2 || parts[0].isBlank()) {
+                throw new AgentExecutionException(
+                        AgentExecutionException.Category.PLAN_VALIDATION,
+                        "Filter must use key=value");
+            }
+            filters.put(parts[0], parts[1]);
+        }
+
+        try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, env)) {
+            var result = orchestrator.executeDataDriven(positional[0], positional[1], filters, workers);
+            System.out.println("Data-driven: " + result.testName
+                    + " | Iterations: " + result.totalIterations
+                    + " | Passed: " + result.passedIterations
+                    + " | Failed: " + result.failedIterations);
+            return result.passed() ? 0 : 1;
+        }
+    }
+
+    private static int validate(Config config, ObjectMapper mapper, String env, CliParser cli) throws Exception {
+        requirePositionalCount(cli, 2, "validate <plan|suite> <file>");
+        String[] positional = cli.positional();
+        try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, env)) {
+            if ("plan".equalsIgnoreCase(positional[0])) {
+                return orchestrator.validatePlan(positional[1]).valid() ? 0 : 1;
+            }
+            if ("suite".equalsIgnoreCase(positional[0])) {
+                return orchestrator.validateSuite(positional[1]).valid() ? 0 : 1;
+            }
+            throw configuration("Validation target must be plan or suite");
+        }
+    }
+
+    private static int plugins() {
+        PluginManager manager = new PluginManager();
+        var plugins = manager.discover();
+        System.out.println("=== Plugins ===");
+        if (plugins.isEmpty()) {
+            System.out.println("No plugins discovered.");
+        } else {
+            plugins.forEach(plugin -> System.out.println(plugin.id() + " | " + plugin.version()));
+        }
+        return 0;
+    }
+
+    private static int history(Config config, String limitText) throws Exception {
+        int limit = limitText == null ? 10 : parseBoundedInt(limitText, "--limit", 1, 1000);
+        Path root = Path.of(config.reportsDir(), "history").toAbsolutePath().normalize();
+        Path index = root.resolve("index.json");
+        if (!Files.isRegularFile(index)) {
+            System.out.println("No execution history found.");
+            System.out.println("History directory: " + root);
+            return 0;
+        }
+
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        List<RunHistoryManager.RunSummary> all = mapper.readValue(
+                index.toFile(),
+                new com.fasterxml.jackson.core.type.TypeReference<List<RunHistoryManager.RunSummary>>() { });
+        all.stream()
+                .skip(Math.max(0, all.size() - limit))
+                .forEach(r -> System.out.println(r.runId + " | " + r.suiteName + " | " + r.status
+                        + " | " + r.passRate + "% | " + r.durationMs + " ms"));
+        return 0;
+    }
+
+    private static int parseBoundedInt(String value, String option, int min, int max) {
+        try {
+            int parsed = Integer.parseInt(value);
+            if (parsed < min || parsed > max) {
+                throw configuration(option + " must be between " + min + " and " + max);
+            }
+            return parsed;
+        } catch (NumberFormatException e) {
+            throw new AgentExecutionException(
+                    AgentExecutionException.Category.CONFIGURATION,
+                    option + " must be an integer: " + value,
+                    e);
+        }
+    }
+
+    private static void requirePositionalCount(CliParser cli, int expected, String usage) {
+        int actual = cli.positional().length;
+        if (actual != expected) {
+            throw configuration("Usage: " + usage);
+        }
+    }
+
+    private static AgentExecutionException configuration(String message) {
+        return new AgentExecutionException(AgentExecutionException.Category.CONFIGURATION, message);
+    }
+
+    private static String logArea(String[] args) {
+        if (args.length == 0 || args[0].startsWith("--")) return "terminal";
+        return switch (args[0].toLowerCase()) {
+            case "plan", "suite", "data-driven", "validate" -> "api";
+            case "interactive" -> "ui";
+            case "history" -> "history";
+            default -> "terminal";
+        };
+    }
+
+    private static void interactive(Config config, ObjectMapper mapper, String env) throws Exception {
+        try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, env);
+             Scanner scanner = new Scanner(System.in)) {
+            while (true) {
+                System.out.print("\nRequirement> ");
+                if (!scanner.hasNextLine()) break;
+                String requirement = scanner.nextLine();
+                if ("exit".equalsIgnoreCase(requirement.trim())) break;
+                if (requirement.isBlank()) continue;
+                try {
+                    TestPlan plan = orchestrator.plan(requirement);
+                    ExecutionResult result = orchestrator.execute(plan);
+                    orchestrator.analyzeIfFailed(plan, result);
+                    orchestrator.writeReport(result);
+                } catch (Exception e) {
+                    System.err.println("Agent error: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    private static void usage() {
+        System.out.println("=== AI Testing Agent v" + VERSION + " ===\nCommands:\n"
+                + "  plan <file> [--env <name>]\n"
+                + "  suite <file> [--env <name>]\n"
+                + "  data-driven <plan> <data-file> [--filter key=value] [--parallelism <N>] [--env <name>]\n"
+                + "  history [--limit <N>]\n"
+                + "  validate plan <file> [--env <name>]\n"
+                + "  validate suite <file> [--env <name>]\n"
+                + "  plugins\n"
+                + "  interactive [--env <name>]\n"
+                + "  version\n"
+                + "  help\n\n"
+                + "Global options: --help, --version");
+    }
 }
