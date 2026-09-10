@@ -48,8 +48,8 @@ public final class TestPlanValidator {
                 } else {
                     if (!action.matches("(?i)navigate|click|fill|press|selectOption|hover|check|uncheck|assertVisible|assertText|assertValue|assertTitle|assertUrl|waitFor|waitForVisible|waitForHidden|screenshot"))
                         errors.add(prefix + ": invalid UI action: " + action);
-                    if (requiresLocator(action) && (step.locator == null || step.locator.isBlank()))
-                        errors.add(prefix + ": locator is required for action " + action);
+                    if (requiresLocator(action) && !hasLocatorOrTarget(step))
+                        errors.add(prefix + ": locator or semantic target is required for action " + action);
                     if ("waitFor".equalsIgnoreCase(action)) {
                         try {
                             if (Long.parseLong(step.value) < 0) errors.add(prefix + ": waitFor value cannot be negative");
@@ -65,6 +65,10 @@ public final class TestPlanValidator {
 
     private static boolean requiresLocator(String action) {
         return action.matches("(?i)click|fill|press|selectOption|hover|check|uncheck|assertVisible|assertText|assertValue|waitForVisible|waitForHidden");
+    }
+
+    private static boolean hasLocatorOrTarget(TestStep step) {
+        return (step.locator != null && !step.locator.isBlank()) || (step.target != null && !step.target.isBlank());
     }
 
     public static void requireValid(TestPlan plan) {
