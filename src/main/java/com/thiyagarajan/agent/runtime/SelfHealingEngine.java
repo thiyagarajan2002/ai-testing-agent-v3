@@ -17,11 +17,11 @@ public final class SelfHealingEngine {
     }
 
     public static HealingResult heal(Page page, String originalLocator, double minConfidence) {
+        if (!Double.isFinite(minConfidence) || minConfidence < 0.0 || minConfidence > 1.0) {
+            throw new IllegalArgumentException("minConfidence must be a finite value between 0 and 1");
+        }
         if (page == null || originalLocator == null || originalLocator.isBlank()) {
             return new HealingResult(originalLocator, null, 0.0, "No page or locator supplied", List.of());
-        }
-        if (Double.isNaN(minConfidence) || minConfidence < 0.0 || minConfidence > 1.0) {
-            throw new IllegalArgumentException("minConfidence must be between 0 and 1");
         }
         List<Evidence> evidence = new ArrayList<>();
         for (Candidate candidate : candidates(originalLocator)) {
@@ -32,19 +32,19 @@ public final class SelfHealingEngine {
                 boolean visible = count == 1 && locator.isVisible();
                 evidence.add(new Evidence(candidate.locator(), count, visible, candidate.confidence(), candidate.reason()));
                 if (visible) {
-                    return new HealingResult(originalLocator, candidate.locator(), candidate.confidence(), candidate.reason(), evidence);
+                    return new HealingResult(originalLocator, candidate.locator(), candidate.confidence(), candidate.reason(), List.copyOf(evidence));
                 }
             } catch (Exception ignored) {
                 evidence.add(new Evidence(candidate.locator(), -1, false, candidate.confidence(), "Candidate evaluation failed"));
             }
         }
-        return new HealingResult(originalLocator, null, 0.0, "No unique visible candidate met the confidence threshold", evidence);
+        return new HealingResult(originalLocator, null, 0.0, "No unique visible candidate met the confidence threshold", List.copyOf(evidence));
     }
 
     public static List<Candidate> candidates(String locator) {
         LinkedHashSet<String> seen = new LinkedHashSet<>();
         List<Candidate> result = new ArrayList<>();
-        if (locator == null || locator.isBlank()) return result;
+        if (locator == null || locator.isBlank()) return List.of();
         String trimmed = locator.trim();
         if (trimmed.startsWith("#") && trimmed.length() > 1) {
             String id = cssValue(trimmed.substring(1));
@@ -60,22 +60,29 @@ public final class SelfHealingEngine {
             String value = quotedAttributeValue(trimmed, "name");
             if (value != null) add(result, seen, "[id=\"" + cssValue(value) + "\"]", 0.88, "Same name expressed as id");
         }
-        return result;
+        return List.copyOf(result);
     }
 
     private static void add(List<Candidate> result, LinkedHashSet<String> seen, String locator, double confidence, String reason) {
         if (seen.add(locator)) result.add(new Candidate(locator, confidence, reason));
     }
+
     private static String quotedAttributeValue(String locator, String attribute) {
         String prefix = "[" + attribute + "=\"";
         if (!locator.startsWith(prefix) || !locator.endsWith("\"]")) return null;
         return locator.substring(prefix.length(), locator.length() - 2);
     }
-    private static String cssValue(String value) { return value.replace("\\", "\\\\").replace("\"", "\\\""); }
+
+    private static String cssValue(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
 
     public record Candidate(String locator, double confidence, String reason) { }
     public record Evidence(String locator, int matchCount, boolean visible, double confidence, String reason) { }
     public record HealingResult(String originalLocator, String healedLocator, double confidence, String reason, List<Evidence> evidence) {
+        public HealingResult {
+            evidence = evidence == null ? List.of() : List.copyOf(evidence);
+        }
         public HealingResult(String originalLocator, String healedLocator, double confidence, String reason) {
             this(originalLocator, healedLocator, confidence, reason, List.of());
         }
