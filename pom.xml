@@ -4,7 +4,7 @@
 
   <groupId>com.thiyagarajan</groupId>
   <artifactId>testing-agent</artifactId>
-  <version>3.40.0</version>
+  <version>3.42.0</version>
   <name>AI Testing Agent</name>
 
   <properties>
@@ -93,9 +93,6 @@
         <version>3.6.0</version>
       </plugin>
 
-      <!-- Produces a single runnable fat jar (target/testing-agent-<version>-shaded.jar)
-           containing all runtime dependencies, so the agent can be run outside this
-           source tree with a plain `java -jar` command. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
