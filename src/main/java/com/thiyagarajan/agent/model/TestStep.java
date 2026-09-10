@@ -8,6 +8,9 @@ import java.util.Map;
 public class TestStep {
     public String action;
     public String path = "";
+    /** Natural-language UI intent. When present, the framework resolves the actual locator from live DOM evidence. */
+    public String target = "";
+    /** Optional explicit Playwright locator retained for backward compatibility. */
     public String locator = "";
     public String value = "";
     public String body = "";
