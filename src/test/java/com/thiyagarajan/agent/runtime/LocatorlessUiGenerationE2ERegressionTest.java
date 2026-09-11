@@ -39,7 +39,7 @@ class LocatorlessUiGenerationE2ERegressionTest {
     void completesLocatorlessPlanAgainstChangingLiveDomAndGeneratesConcreteCode() throws Exception {
         String requirement = "Open the local demo, search java tutorial, then play the first video";
         AiProvider ai = prompt -> {
-            if (prompt.contains("Return a TestPlan") || prompt.contains("planning")) {
+            if (prompt.contains("You are a software testing planner.")) {
                 return """
                         {
                           "name":"Locatorless YouTube-style flow",
