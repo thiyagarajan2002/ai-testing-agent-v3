@@ -40,7 +40,7 @@ class SemanticLocatorResolverQualityRegressionTest {
 
     @Test
     @Tag("sanity")
-    void resolvesStableAccessibleNameFromLiveDom() {
+    void resolvesStableAccessibleNameFromLiveDom() throws Exception {
         withPage(page -> {
             TestStep step = step("click", "login button");
             AiProvider ai = prompt -> "{\"locator\":\"button[aria-label='Login']\",\"confidence\":0.96,\"reason\":\"stable accessible attribute\",\"alternatives\":[]}";
@@ -54,7 +54,7 @@ class SemanticLocatorResolverQualityRegressionTest {
 
     @Test
     @Tag("regression")
-    void fallsBackToFirstVerifiedAlternativeWhenPrimaryIsInvalid() {
+    void fallsBackToFirstVerifiedAlternativeWhenPrimaryIsInvalid() throws Exception {
         withPage(page -> {
             TestStep step = step("click", "login button");
             AiProvider ai = prompt -> "{\"locator\":\"button[data-ai-invented='x']\",\"confidence\":0.91,\"reason\":\"primary\",\"alternatives\":[\"button[aria-label='Login']\"]}";
@@ -68,7 +68,7 @@ class SemanticLocatorResolverQualityRegressionTest {
 
     @Test
     @Tag("regression")
-    void rejectsLowConfidenceEvenWhenSelectorExists() {
+    void rejectsLowConfidenceEvenWhenSelectorExists() throws Exception {
         withPage(page -> {
             TestStep step = step("click", "login button");
             AiProvider ai = prompt -> "{\"locator\":\"button[aria-label='Login']\",\"confidence\":0.49,\"reason\":\"weak match\",\"alternatives\":[]}";
@@ -82,7 +82,7 @@ class SemanticLocatorResolverQualityRegressionTest {
 
     @Test
     @Tag("regression")
-    void rejectsXPathAndJavaCandidatesEvenIfPlaywrightCouldInterpretThem() {
+    void rejectsXPathAndJavaCandidatesEvenIfPlaywrightCouldInterpretThem() throws Exception {
         withPage(page -> {
             TestStep step = step("click", "login button");
             AiProvider ai = prompt -> "{\"locator\":\"//button[@aria-label='Login']\",\"confidence\":0.99,\"reason\":\"xpath\",\"alternatives\":[\"page.locator(\\\"button[aria-label='Login']\\\")\"]}";
@@ -96,7 +96,7 @@ class SemanticLocatorResolverQualityRegressionTest {
 
     @Test
     @Tag("regression")
-    void preservesPreviousStepContextInAiPrompt() {
+    void preservesPreviousStepContextInAiPrompt() throws Exception {
         withPage(page -> {
             TestStep previous = step("click", "first result");
             previous.locator = "article:nth-of-type(1) button";
@@ -122,7 +122,7 @@ class SemanticLocatorResolverQualityRegressionTest {
         return step;
     }
 
-    private static void withPage(PageConsumer consumer) {
+    private static void withPage(PageConsumer consumer) throws Exception {
         try (Playwright playwright = Playwright.create()) {
             Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
             try (Page page = browser.newPage()) {
@@ -150,6 +150,6 @@ class SemanticLocatorResolverQualityRegressionTest {
 
     @FunctionalInterface
     private interface PageConsumer {
-        void accept(Page page);
+        void accept(Page page) throws Exception;
     }
 }
