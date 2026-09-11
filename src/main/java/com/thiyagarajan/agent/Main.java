@@ -60,7 +60,7 @@ public final class Main {
     }
 
     private static int generateUiCode(Config config, ObjectMapper mapper, String env, CliParser cli) throws Exception {
-        requirePositionalCount(cli, 1, "generate <requirement> [--output <file]");
+        requirePositionalCount(cli, 1, "generate <requirement> [--output <file>]");
         String requirement = cli.positional()[0]; String source;
         try (TestOrchestrator orchestrator = new TestOrchestrator(config, mapper, env)) { source = orchestrator.generateUiCode(requirement, "GeneratedUiTest"); }
         Path output = cli.option("--output") == null ? Path.of("generated", "GeneratedUiTest.java") : Path.of(cli.option("--output")).toAbsolutePath().normalize();
