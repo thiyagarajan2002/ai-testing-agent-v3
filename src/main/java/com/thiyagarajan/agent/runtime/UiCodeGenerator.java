@@ -3,7 +3,11 @@ package com.thiyagarajan.agent.runtime;
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestStep;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /** Generates readable Java + Playwright source from an AI plan after locator resolution. */
 public final class UiCodeGenerator {
@@ -17,6 +21,8 @@ public final class UiCodeGenerator {
         if (safeClass.isBlank() || !Character.isJavaIdentifierStart(safeClass.charAt(0))) {
             safeClass = "GeneratedUiTest";
         }
+
+        List<String> methodNames = uniqueMethodNames(plan.steps);
 
         StringBuilder out = new StringBuilder();
         out.append("import com.microsoft.playwright.*;\n")
@@ -39,24 +45,24 @@ public final class UiCodeGenerator {
            .append("    @Test\n")
            .append("    void generatedScenario() {\n");
 
-        for (TestStep step : plan.steps) {
-            out.append("        ").append(methodName(step)).append("();\n");
+        for (String methodName : methodNames) {
+            out.append("        ").append(methodName).append("();\n");
         }
         out.append("    }\n\n");
 
-        for (TestStep step : plan.steps) {
-            appendMethod(out, plan, step);
+        for (int i = 0; i < plan.steps.size(); i++) {
+            appendMethod(out, plan, plan.steps.get(i), methodNames.get(i));
         }
         out.append("}\n");
         return out.toString();
     }
 
-    private void appendMethod(StringBuilder out, TestPlan plan, TestStep step) {
+    private void appendMethod(StringBuilder out, TestPlan plan, TestStep step, String methodName) {
         String action = step.action == null ? "" : step.action.toLowerCase(Locale.ROOT);
         String locator = step.locator == null ? "" : step.locator;
         String value = step.value == null ? "" : step.value;
 
-        out.append("    private void ").append(methodName(step)).append("() {\n");
+        out.append("    private void ").append(methodName).append("() {\n");
         switch (action) {
             case "navigate" -> out.append("        page.navigate(\"")
                     .append(java(resolveUrl(plan.baseUrl, value)))
@@ -117,6 +123,17 @@ public final class UiCodeGenerator {
             throw new IllegalStateException(
                     "Cannot generate UI code without a resolved locator for target: " + step.target);
         }
+    }
+
+    private List<String> uniqueMethodNames(List<TestStep> steps) {
+        Map<String, Integer> counts = new HashMap<>();
+        List<String> result = new ArrayList<>(steps.size());
+        for (TestStep step : steps) {
+            String base = methodName(step);
+            int occurrence = counts.merge(base, 1, Integer::sum);
+            result.add(occurrence == 1 ? base : base + occurrence);
+        }
+        return result;
     }
 
     private String methodName(TestStep step) {
