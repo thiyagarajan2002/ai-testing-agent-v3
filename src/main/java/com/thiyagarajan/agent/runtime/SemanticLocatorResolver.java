@@ -2,12 +2,12 @@ package com.thiyagarajan.agent.runtime;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.thiyagarajan.agent.ai.AiProvider;
 import com.thiyagarajan.agent.model.TestStep;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /** Resolves natural-language UI intent to a verified Playwright locator using live DOM evidence. */
@@ -17,11 +17,17 @@ public final class SemanticLocatorResolver {
     private static final double MIN_CONFIDENCE = 0.50;
     private final AiProvider ai;
     private final ObjectMapper mapper;
+    private final LocatorQualityEngine qualityEngine;
 
     public SemanticLocatorResolver(AiProvider ai, ObjectMapper mapper) {
+        this(ai, mapper, new LocatorQualityEngine());
+    }
+
+    SemanticLocatorResolver(AiProvider ai, ObjectMapper mapper, LocatorQualityEngine qualityEngine) {
         if (ai == null) throw new IllegalArgumentException("AI provider cannot be null");
         this.ai = ai;
         this.mapper = mapper == null ? new ObjectMapper() : mapper;
+        this.qualityEngine = qualityEngine == null ? new LocatorQualityEngine() : qualityEngine;
     }
 
     public Resolution resolve(Page page, TestStep step) throws Exception {
@@ -49,19 +55,20 @@ public final class SemanticLocatorResolver {
 
         String prompt = """
                 You are the semantic locator engine of a UI testing framework.
-                Resolve ONE natural-language UI target to a Playwright CSS locator using ONLY the supplied live DOM and visible text.
+                Resolve ONE natural-language UI target to Playwright CSS locator candidates using ONLY the supplied live DOM and visible text.
                 Return ONLY valid JSON:
                 {"locator":"string","confidence":0.0,"reason":"string","alternatives":["string"]}
 
                 Rules:
                 1. Never invent an element or attribute absent from the evidence.
                 2. Prefer stable attributes, accessible-name-like attributes (aria-label, title, name), labels, exact text, and structural relationships.
-                3. Interpret ordinal intent such as "first video" from the DOM order, not from guesswork.
+                3. Interpret ordinal intent such as "first video" from DOM order, not guesswork.
                 4. Use the action to distinguish targets: fill needs an editable control; click needs an actionable element; assertions need the described content.
-                5. Return a CSS selector that Playwright can execute. Do not return XPath, Java, or markdown.
-                6. If the target is ambiguous, return the strongest candidate only when evidence clearly supports it; otherwise return empty locator and confidence 0.
-                7. Alternatives must also be evidence-backed CSS selectors.
+                5. Return CSS selectors only. Do not return XPath, Java, or markdown.
+                6. If the target is ambiguous, return an empty locator and confidence 0 unless the evidence clearly supports candidates.
+                7. Alternatives must also be evidence-backed CSS selectors and should be ordered from strongest to weakest.
                 8. Confidence must be between 0 and 1.
+                9. The framework will independently verify and rank every candidate against the live page.
 
                 ACTION: """ + safe(step.action) + "\nTARGET: " + safe(step.target)
                 + "\nPREVIOUS STEPS:\n" + context
@@ -80,26 +87,42 @@ public final class SemanticLocatorResolver {
         if (confidence < MIN_CONFIDENCE) throw new IllegalStateException("AI locator confidence below threshold: " + confidence + " for target: " + step.target);
         String reason = node.path("reason").asText("").trim();
 
+        List<RankedCandidate> ranked = new ArrayList<>();
         for (int i = 0; i < candidates.size(); i++) {
             String candidate = candidates.get(i);
             if (!isCssCandidate(candidate)) continue;
-            try {
-                Locator locator = page.locator(candidate);
-                int count = locator.count();
-                if (count > 0 && locator.first().isVisible()) {
-                    double selectedConfidence = i == 0 ? confidence : Math.max(0.0, confidence - (i * 0.05));
-                    if (selectedConfidence < MIN_CONFIDENCE) continue;
-                    return new Resolution(candidate, selectedConfidence, reason.isBlank() ? "AI semantic match verified against live DOM" : reason, List.copyOf(candidates.subList(i + 1, candidates.size())));
-                }
-            } catch (Exception ignored) { }
+
+            double candidateConfidence = Math.max(0.0, confidence - (i * 0.05));
+            if (candidateConfidence < MIN_CONFIDENCE) continue;
+
+            LocatorQualityEngine.Evaluation quality = qualityEngine.evaluate(page, candidate, step.action);
+            if (!quality.usable()) continue;
+
+            double rankScore = (quality.score() * 0.65) + (candidateConfidence * 0.35);
+            ranked.add(new RankedCandidate(candidate, candidateConfidence, rankScore, quality, i));
         }
+
+        ranked.sort(Comparator.comparingDouble(RankedCandidate::rankScore).reversed()
+                .thenComparingInt(RankedCandidate::originalIndex));
+
+        if (!ranked.isEmpty()) {
+            RankedCandidate selected = ranked.get(0);
+            List<String> remaining = ranked.stream().skip(1).map(RankedCandidate::locator).toList();
+            String resolvedReason = reason.isBlank() ? "AI semantic match" : reason;
+            resolvedReason += "; quality=" + selected.quality().quality()
+                    + "; score=" + String.format(java.util.Locale.ROOT, "%.2f", selected.quality().score())
+                    + "; " + selected.quality().reason();
+            return new Resolution(selected.locator(), selected.confidence(), resolvedReason, remaining);
+        }
+
         throw new IllegalStateException("AI could not resolve a verified UI target: " + step.target);
     }
 
     private boolean isCssCandidate(String candidate) {
         if (candidate == null || candidate.isBlank()) return false;
         String s = candidate.trim().toLowerCase();
-        return !s.startsWith("/") && !s.startsWith("xpath=") && !s.startsWith("java ") && !s.contains("```") && !s.contains("page.locator(");
+        return !s.startsWith("/") && !s.startsWith("xpath=") && !s.startsWith("java ")
+                && !s.contains("```") && !s.contains("page.locator(");
     }
 
     private void addCandidate(List<String> candidates, String value) {
@@ -119,6 +142,14 @@ public final class SemanticLocatorResolver {
     }
 
     private String safe(String value) { return value == null ? "" : SecurityRedactor.redactText(value); }
+
+    private record RankedCandidate(
+            String locator,
+            double confidence,
+            double rankScore,
+            LocatorQualityEngine.Evaluation quality,
+            int originalIndex
+    ) { }
 
     public record Resolution(String locator, double confidence, String reason, List<String> alternatives) {
         public Resolution {
