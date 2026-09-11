@@ -14,6 +14,7 @@ import java.util.List;
 public final class SemanticLocatorResolver {
     private static final int MAX_DOM_CHARS = 50000;
     private static final int MAX_TEXT_CHARS = 12000;
+    private static final double MIN_CONFIDENCE = 0.50;
     private final AiProvider ai;
     private final ObjectMapper mapper;
 
@@ -76,23 +77,29 @@ public final class SemanticLocatorResolver {
         double confidence = node.path("confidence").asDouble(0.0);
         if (!Double.isFinite(confidence)) confidence = 0.0;
         confidence = Math.max(0.0, Math.min(1.0, confidence));
+        if (confidence < MIN_CONFIDENCE) throw new IllegalStateException("AI locator confidence below threshold: " + confidence + " for target: " + step.target);
         String reason = node.path("reason").asText("").trim();
 
         for (int i = 0; i < candidates.size(); i++) {
             String candidate = candidates.get(i);
+            if (!isCssCandidate(candidate)) continue;
             try {
                 Locator locator = page.locator(candidate);
                 int count = locator.count();
-                if (count > 0) {
-                    boolean visible = locator.first().isVisible();
-                    if (visible) {
-                        double selectedConfidence = i == 0 ? confidence : Math.max(0.0, confidence - (i * 0.05));
-                        return new Resolution(candidate, selectedConfidence, reason.isBlank() ? "AI semantic match verified against live DOM" : reason, List.copyOf(candidates.subList(i + 1, candidates.size())));
-                    }
+                if (count > 0 && locator.first().isVisible()) {
+                    double selectedConfidence = i == 0 ? confidence : Math.max(0.0, confidence - (i * 0.05));
+                    if (selectedConfidence < MIN_CONFIDENCE) continue;
+                    return new Resolution(candidate, selectedConfidence, reason.isBlank() ? "AI semantic match verified against live DOM" : reason, List.copyOf(candidates.subList(i + 1, candidates.size())));
                 }
             } catch (Exception ignored) { }
         }
         throw new IllegalStateException("AI could not resolve a verified UI target: " + step.target);
+    }
+
+    private boolean isCssCandidate(String candidate) {
+        if (candidate == null || candidate.isBlank()) return false;
+        String s = candidate.trim().toLowerCase();
+        return !s.startsWith("/") && !s.startsWith("xpath=") && !s.startsWith("java ") && !s.contains("```") && !s.contains("page.locator(");
     }
 
     private void addCandidate(List<String> candidates, String value) {
