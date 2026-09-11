@@ -1,8 +1,8 @@
-# AI Testing Agent v3.44.0 Test Strategy
+# AI Testing Agent v3.45.0 Test Strategy
 
 ## Purpose
 
-v3.44.0 makes sanity and regression coverage explicit for API, UI, AI planning, locatorless execution, and model serialization. The strategy is designed to catch fast contract failures before the full Playwright and repository-example suite runs.
+v3.45.0 strengthens sanity and regression coverage around AI-driven locatorless UI testing. The goal is to prevent an AI-generated selector from becoming executable code unless it is supported by the live DOM and meets the locator confidence policy.
 
 ## Test layers
 
@@ -11,74 +11,80 @@ v3.44.0 makes sanity and regression coverage explicit for API, UI, AI planning, 
 | API sanity | Core API request/extraction path | Local test server | Fast health check | `sanity` |
 | API regression | HTTP methods, headers, retry, assertions | Local test server | Protect existing API behavior | `regression` |
 | UI sanity | Navigation and explicit Playwright actions | Local test server + Chromium | Verify basic browser execution | `sanity` |
-| UI regression | Semantic target resolution and DOM state changes | Local test server + Chromium | Protect locatorless/self-healing flow | `regression` |
-| Planner/validation sanity | Plan schema and semantic target rules | None | Reject invalid plans early | `sanity` |
-| Planner/serialization regression | Prompt contract and Jackson round-trip | None | Preserve model compatibility | `regression` |
+| UI regression | Semantic target resolution and DOM state changes | Local test server + Chromium | Protect locatorless execution | `regression` |
+| Locator quality sanity | Stable/accessibility-oriented selector resolution | Local test server + Chromium | Verify evidence-backed resolution | `sanity` |
+| Locator quality regression | alternatives, confidence, CSS-only contract, context | Local test server + Chromium | Prevent unsafe AI selectors | `regression` |
+| Planner/validation | Plan schema and semantic target rules | None | Reject invalid plans early | `sanity` / `regression` |
+| Code generation | Concrete locator emission and unresolved-locator rejection | None | Prevent invalid generated Java | `regression` |
 | Full suite | All unit and execution tests | Mixed | Final release confidence | No tag filter |
 | Examples | Repository plans/suites and CLI examples | Depends on example | Validate user-facing workflows | N/A |
 
-## Required checks
+## Locator quality contract
 
-### API
+A semantic locator is executable only when all of these conditions hold:
 
-Sanity checks must cover a representative GET request and variable extraction. Regression checks must cover POST JSON, headers, all supported HTTP methods, retry recovery, and assertion failure handling.
+1. The AI returns a non-empty candidate.
+2. Confidence is finite, normalized to `0..1`, and at least `0.50`.
+3. The candidate is a CSS selector, not XPath, Java, markdown, or generated framework code.
+4. Playwright can parse the selector.
+5. The selector matches at least one element in the current live DOM.
+6. The first matching element is visible.
+7. If the primary candidate fails, evidence-backed alternatives may be evaluated in order.
+8. A state-changing action must cause the next semantic target to be resolved against the new DOM rather than a stale selector snapshot.
 
-### UI
+## Semantic target coverage
 
-Sanity checks must prove browser navigation and basic actions work. Regression checks must prove that semantic targets are resolved against the live DOM, that a state-changing action causes the next target to be resolved from the new DOM, and that an AI-provided selector that does not exist is rejected instead of executed.
+Regression fixtures should include:
 
-### AI locatorless flow
+- stable attributes and accessible names
+- exact text and structural relationships
+- ordinal targets such as `first video`
+- contextual references to previous steps
+- invalid selectors and invented attributes
+- XPath/Java/markdown selector injection attempts
+- low-confidence responses
+- alternative selector fallback
+- DOM changes after clicks or navigation
 
-The framework must keep natural-language `target` separate from concrete `locator`. A generated plan may contain a semantic target without a locator. During live execution/generation, the resolver must inspect current DOM evidence, validate the candidate selector, and only then execute the action. Generated Java code may contain the verified concrete locator.
+## API
 
-### Code generation
+Sanity checks cover a representative GET request and variable extraction. Regression checks cover POST JSON, headers, all supported HTTP methods, retry recovery, and assertion failure handling.
 
-Generated UI code must use concrete verified locators and retain the intended action sequence. Natural-language targets must not be emitted as Playwright selectors.
+## UI
+
+Sanity checks prove browser navigation and basic actions work. Regression checks prove semantic targets are resolved against the live DOM, changing DOM state is re-resolved, and invalid AI selectors are rejected.
+
+## Code generation
+
+Generated UI code must contain concrete locators produced after live verification. Natural-language targets must never be emitted as Playwright selectors. Direct generation from an unresolved semantic target is rejected instead of producing a broken test.
 
 ## Maven commands
 
-Run the focused suites with:
+Focused suites:
 
 ```bash
 mvn -B -Psanity test
 mvn -B -Pregression test
 ```
 
-Run the complete test suite with:
+Complete suite:
 
 ```bash
 mvn -B verify
 ```
 
-The focused profiles use JUnit 5 tags through Maven Surefire. The default build remains unfiltered so the complete suite is still the final regression gate.
+## CI release gate
 
-## CI order
-
-1. Validate CI scripts.
-2. Compile the project.
-3. Validate a representative API plan.
-4. Validate a representative suite.
-5. Install Playwright Chromium.
-6. Run the focused sanity suite.
-7. Run the focused regression suite.
-8. Run the complete Maven verification suite.
-9. Run all repository examples.
-10. Upload reports, screenshots, and the runnable shaded JAR.
-
-## Release gate
-
-A release candidate is considered healthy only when the sanity profile, regression profile, full `verify` suite, and repository examples all succeed. A failed focused suite must be fixed rather than hidden by the full-suite run.
+A release candidate is healthy only when the sanity profile, regression profile, full `verify` suite, and repository examples all succeed. Focused suites are intentionally deterministic and use local fixtures where possible. No public website or external AI service is required by the locator quality regression tests.
 
 ## Future expansion
 
-The next coverage additions should tag and isolate:
+The next coverage additions should isolate:
 
+- generated Java compilation tests
+- CLI `generate` end-to-end tests with a deterministic AI provider
 - AI planner contract tests
-- semantic locator ranking and alternative-selector tests
-- code-generation compile tests
-- CLI command tests
 - self-healing and retry-history regression tests
 - report/history integrity tests
 - parallel execution regression tests
-
-These additions should continue using deterministic local fixtures wherever possible so CI does not depend on public websites or external AI services.
+- locator ranking metrics and selector stability scoring
