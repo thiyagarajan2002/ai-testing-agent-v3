@@ -34,16 +34,16 @@ public final class UiCodeGenerator {
         out.append("    private void ").append(methodName(step)).append("() {\n");
         switch (action) {
             case "navigate" -> out.append("        page.navigate(\"").append(java(resolveUrl(plan.baseUrl, value))).append("\");\n");
-            case "click" -> out.append("        page.locator(\"").append(java(locator)).append("\").click();\n");
-            case "fill" -> out.append("        page.locator(\"").append(java(locator)).append("\").fill(\"").append(java(value)).append("\");\n");
-            case "press" -> out.append("        page.locator(\"").append(java(locator)).append("\").press(\"").append(java(value)).append("\");\n");
-            case "selectoption" -> out.append("        page.locator(\"").append(java(locator)).append("\").selectOption(\"").append(java(value)).append("\");\n");
-            case "hover" -> out.append("        page.locator(\"").append(java(locator)).append("\").hover();\n");
-            case "check" -> out.append("        page.locator(\"").append(java(locator)).append("\").check();\n");
-            case "uncheck" -> out.append("        page.locator(\"").append(java(locator)).append("\").uncheck();\n");
-            case "assertvisible" -> out.append("        Assertions.assertTrue(page.locator(\"").append(java(locator)).append("\").isVisible());\n");
-            case "asserttext" -> out.append("        Assertions.assertTrue(page.locator(\"").append(java(locator)).append("\").innerText().contains(\"").append(java(value)).append("\"));\n");
-            case "assertvalue" -> out.append("        Assertions.assertEquals(\"").append(java(value)).append("\", page.locator(\"").append(java(locator)).append("\").inputValue());\n");
+            case "click" -> appendLocatorAction(out, locator, "click()", step);
+            case "fill" -> appendLocatorAction(out, locator, "fill(\"" + java(value) + "\")", step);
+            case "press" -> appendLocatorAction(out, locator, "press(\"" + java(value) + "\")", step);
+            case "selectoption" -> appendLocatorAction(out, locator, "selectOption(\"" + java(value) + "\")", step);
+            case "hover" -> appendLocatorAction(out, locator, "hover()", step);
+            case "check" -> appendLocatorAction(out, locator, "check()", step);
+            case "uncheck" -> appendLocatorAction(out, locator, "uncheck()", step);
+            case "assertvisible" -> appendLocatorAction(out, locator, "isVisible()", step, "Assertions.assertTrue(", ");");
+            case "asserttext" -> appendLocatorAction(out, locator, "innerText().contains(\"" + java(value) + "\")", step, "Assertions.assertTrue(", ");");
+            case "assertvalue" -> appendLocatorAction(out, locator, "inputValue()", step, "Assertions.assertEquals(\"" + java(value) + "\", ", ");
             case "asserttitle" -> out.append("        Assertions.assertTrue(page.title().contains(\"").append(java(value)).append("\"));\n");
             case "asserturl" -> out.append("        Assertions.assertTrue(page.url().contains(\"").append(java(value)).append("\"));\n");
             case "waitfor" -> out.append("        page.waitForTimeout(").append(java(value)).append(");\n");
@@ -51,6 +51,20 @@ public final class UiCodeGenerator {
             default -> out.append("        throw new IllegalStateException(\"Unsupported generated action: ").append(java(step.action)).append("\");\n");
         }
         out.append("    }\n\n");
+    }
+
+    private void appendLocatorAction(StringBuilder out, String locator, String expression, TestStep step) {
+        requireLocator(locator, step);
+        out.append("        page.locator(\"").append(java(locator)).append("\").").append(expression).append(";\n");
+    }
+
+    private void appendLocatorAction(StringBuilder out, String locator, String expression, TestStep step, String prefix, String suffix) {
+        requireLocator(locator, step);
+        out.append("        ").append(prefix).append("page.locator(\"").append(java(locator)).append("\").").append(expression).append(suffix).append("\n");
+    }
+
+    private void requireLocator(String locator, TestStep step) {
+        if (locator == null || locator.isBlank()) throw new IllegalStateException("Cannot generate UI code without a resolved locator for target: " + step.target);
     }
 
     private String methodName(TestStep step) {
