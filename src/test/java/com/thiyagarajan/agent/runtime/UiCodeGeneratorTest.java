@@ -5,6 +5,11 @@ import com.thiyagarajan.agent.model.TestStep;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class UiCodeGeneratorTest {
@@ -39,6 +44,45 @@ class UiCodeGeneratorTest {
         assertTrue(source.contains("fillSearchInput();"));
         assertTrue(source.contains("pressSearchInput();"));
         assertTrue(source.contains("clickFirstVideo();"));
+    }
+
+    @Test
+    @Tag("regression")
+    void generatedResolvedSourceCompiles() throws Exception {
+        TestPlan plan = new TestPlan();
+        plan.type = "UI";
+        plan.baseUrl = "https://example.com";
+
+        TestStep navigate = step("navigate", "", "https://example.com");
+        TestStep fill = step("fill", "search input", "java tutorial");
+        fill.locator = "input[name='search_query']";
+        TestStep press = step("press", "search input", "Enter");
+        press.locator = "input[name='search_query']";
+        TestStep click = step("click", "first video", "");
+        click.locator = "article a.video-title";
+
+        plan.steps.add(navigate);
+        plan.steps.add(fill);
+        plan.steps.add(press);
+        plan.steps.add(click);
+
+        String source = new UiCodeGenerator().generate(plan, "GeneratedCompilationTest");
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        assertNotNull(compiler, "JDK compiler is required for generated-source validation");
+
+        Path dir = Files.createTempDirectory("generated-ui-code-");
+        Path sourceFile = dir.resolve("GeneratedCompilationTest.java");
+        Path outputDir = dir.resolve("classes");
+        Files.createDirectories(outputDir);
+        Files.writeString(sourceFile, source);
+
+        int exitCode = compiler.run(null, null, null,
+                "-proc:none",
+                "-classpath", System.getProperty("java.class.path"),
+                "-d", outputDir.toString(),
+                sourceFile.toString());
+
+        assertEquals(0, exitCode, "Generated Playwright Java source must compile");
     }
 
     @Test
