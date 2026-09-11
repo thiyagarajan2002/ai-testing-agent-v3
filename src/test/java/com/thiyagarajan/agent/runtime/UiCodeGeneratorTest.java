@@ -2,12 +2,14 @@ package com.thiyagarajan.agent.runtime;
 
 import com.thiyagarajan.agent.model.TestPlan;
 import com.thiyagarajan.agent.model.TestStep;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class UiCodeGeneratorTest {
     @Test
+    @Tag("regression")
     void generatesResolvedLocatorsAndSemanticMethodNames() {
         TestPlan plan = new TestPlan();
         plan.type = "UI";
@@ -40,6 +42,7 @@ class UiCodeGeneratorTest {
     }
 
     @Test
+    @Tag("regression")
     void doesNotEmitNaturalLanguageTargetAsLocator() {
         TestPlan plan = new TestPlan();
         plan.type = "UI";
@@ -52,6 +55,20 @@ class UiCodeGeneratorTest {
 
         assertTrue(source.contains("button[type='submit']"));
         assertFalse(source.contains("page.locator(\"Login button\")"));
+    }
+
+    @Test
+    @Tag("regression")
+    void rejectsUnresolvedLocatorDuringGeneration() {
+        TestPlan plan = new TestPlan();
+        plan.type = "UI";
+        plan.baseUrl = "https://example.com";
+        plan.steps.add(step("click", "Login button", ""));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> new UiCodeGenerator().generate(plan, "GeneratedUiTest"));
+
+        assertTrue(error.getMessage().contains("resolved locator"));
     }
 
     private TestStep step(String action, String target, String value) {
