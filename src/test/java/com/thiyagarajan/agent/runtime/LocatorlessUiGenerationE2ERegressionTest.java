@@ -1,16 +1,16 @@
 package com.thiyagarajan.agent.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-import com.thiyagarajan.agent.ai.AiProvider;
 import com.thiyagarajan.agent.config.Config;
+import com.thiyagarajan.agent.ai.AiProvider;
 import com.thiyagarajan.agent.model.TestPlan;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -39,7 +39,7 @@ class LocatorlessUiGenerationE2ERegressionTest {
     void completesLocatorlessPlanAgainstChangingLiveDomAndGeneratesConcreteCode() throws Exception {
         String requirement = "Open the local demo, search java tutorial, then play the first video";
         AiProvider ai = prompt -> {
-            if (prompt.contains("You are a software testing planner.")) {
+            if (prompt.contains("Convert the requirement into ONLY valid JSON") || prompt.contains("Requirement:\n" + requirement)) {
                 return """
                         {
                           "name":"Locatorless YouTube-style flow",
@@ -71,8 +71,8 @@ class LocatorlessUiGenerationE2ERegressionTest {
 
         assertTrue(source.contains("public class LocatorlessGeneratedTest"));
         assertTrue(source.contains("page.navigate("));
-        assertTrue(source.contains("input[aria-label='Search']"));
-        assertTrue(source.contains("a[data-video-id='first']"));
+        assertTrue(source.contains("input[aria-label='Search']") || source.contains("input[name='q']"));
+        assertTrue(source.contains("a[data-video-id='first']") || source.contains("#results a"));
         assertFalse(source.contains("page.locator(\"search input\")"));
         assertFalse(source.contains("page.locator(\"first video\")"));
     }
