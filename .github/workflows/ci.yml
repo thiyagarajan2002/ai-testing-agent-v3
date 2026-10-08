@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload test and example reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ai-testing-agent-ci-reports
           path: |
@@ -72,7 +72,7 @@ jobs:
 
       - name: Upload runnable jar
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ai-testing-agent-shaded-jar
           path: target/*-shaded.jar
